@@ -37,7 +37,12 @@ TrinoImpl = (Server as text, optional Catalog as text) as table =>
         table;
 
 
-Header = [#"X-Trino-User" = "Trino", #"X-Trino-Client-Capabilities" = "PARAMETRIC_DATETIME"];
+Header = [
+    #"X-Trino-User" = "Trino"
+    , #"X-Trino-Client-Capabilities" = "PARAMETRIC_DATETIME"
+    , #"Authorization" = "Basic " & Extension.CurrentCredential()[Username] & ":" & Extension.CurrentCredential()[Password]
+    
+];
 
 PostStatementCatalogs = (url as text, optional Catalog as text) as table =>    
     Table.Buffer(let
@@ -131,7 +136,7 @@ PostStatementQueryTables = (url as text, Catalog as text, schema as text, table 
                         actualResult = if buffered <> null and responseCode = 200 then buffered else null
                     in
                         actualResult,
-                (iteration) => #duration(0, 0, 0, 0),
+                (iteration) => #duration(0, 0, 0, 1/5),
                 5),
         body = Json.Document(response),
         Source = if (Record.HasFields(body, {"error"})) then error body[error][message] else GetAllPagesByNextLink(body[nextUri])
@@ -233,11 +238,17 @@ Table.GenerateByPage = (getNextPage as function) as table =>
 //Data Source Kind description
 Trino = [
     Authentication = [
-        // Key = [],
-        // UsernamePassword = []
+        UsernamePassword = [
+            UsernameLabel = Extension.LoadString("UsernameLabelText"),
+            PasswordLabel = Extension.LoadString("PasswordLabelText")
+        ],      
+//         Key = [
+//                      Label = "Access Token",
+//                      KeyLabel = "Get your access token at https://www.surveymonkey.com/apps/power_bi"
+//                  ],
         // Windows = [],
         Implicit = []
-    ],
+    ],  
     Label = Extension.LoadString("DataSourceLabel")
 ];
 
