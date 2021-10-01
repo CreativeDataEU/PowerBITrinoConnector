@@ -16,12 +16,12 @@ section Trino;
 TrinoType = type function (
     Server as (type text meta [
         Documentation.FieldCaption = "Host",
-        Documentation.FieldDescription = "REST API including port number (default 8080)",
+        Documentation.FieldDescription = "Coordinater name including TCP port to connect (Defaults: http=8080, https=8443)",
         Documentation.SampleValues = {"http://trinohost:8080"}
     ]),
     optional Catalog as (type text meta [
         Documentation.FieldCaption = "Catalog",
-        Documentation.FieldDescription = "Catalog name to run queries against it",
+        Documentation.FieldDescription = "Catalog name to run queries against",
         Documentation.SampleValues = {"Hive"}
     ])
     )
@@ -38,30 +38,34 @@ TrinoImpl = (Server as text, optional Catalog as text) as table =>
 
 
 Header = [
-    #"X-Trino-User" = "Trino"
-    , #"X-Trino-Client-Capabilities" = "PARAMETRIC_DATETIME"
-    , #"Authorization" = "Basic " & Extension.CurrentCredential()[Username] & ":" & Extension.CurrentCredential()[Password]
-    
+    //#"X-Trino-User" = "Trino"
+    //, #"X-Trino-Client-Capabilities" = "PARAMETRIC_DATETIME"
+    //, #"X-Forwarded-Proto" = "https",
+    //#"Authorization" = "Basic " & Text.From(Extension.CurrentCredential()[Username]) & ":" & Text.From(Extension.CurrentCredential()[Password])
 ];
+
+
+duration = #duration(0,0,0,1/10);
 
 PostStatementCatalogs = (url as text, optional Catalog as text) as table =>    
     Table.Buffer(let
         response = Value.WaitFor(
                 (iteration) =>
                     let
-                        response = Web.Contents(url & "/v1/statement", 
+                        responsePrepare = () => Web.Contents(url & "/v1/statement", 
                             [
                                 Content=Text.ToBinary("SHOW CATALOGS"),
                                 Headers=Header,
                                 ManualStatusHandling = {200,400,401,403,404,429,500,503}
                             ]
-                        ), 
+                        ),
+                        response = Function.InvokeAfter(responsePrepare, duration),
                         buffered = Binary.Buffer(response),
                         responseCode = Value.Metadata(response)[Response.Status],
                         actualResult = if buffered <> null and responseCode = 200 then buffered else null
                     in
                         actualResult,
-                (iteration) => #duration(0, 0, 0, 0),
+                (iteration) => duration,
                 5),
         body = Json.Document(response),
         Source = if (Record.HasFields(body, {"error"})) then error body[error][message] else GetAllPagesByNextLink(body[nextUri])        
@@ -73,19 +77,20 @@ PostStatementSchemas = (url as text, Catalog as text) as table  =>
          response = Value.WaitFor(
                 (iteration) =>
                     let
-                        response = Web.Contents(url & "/v1/statement", 
+                        responsePrepare = () => Web.Contents(url & "/v1/statement", 
                             [
                                 Content=Text.ToBinary("Select schema_name from " & Catalog & ".information_schema.schemata"),
                                 Headers=Header,
                                 ManualStatusHandling = {200,400,401,403,404,429,500,503}
                             ]
                         ), 
+                        response = Function.InvokeAfter(responsePrepare, duration),
                         buffered = Binary.Buffer(response),
                         responseCode = Value.Metadata(response)[Response.Status],
                         actualResult = if buffered <> null and responseCode = 200 then buffered else null
                     in
                         actualResult,
-                (iteration) => #duration(0, 0, 0, 0),
+                (iteration) => duration,
                 5),
         body = Json.Document(response),
         Source = if (Record.HasFields(body, {"error"})) then error body[error][message] else GetAllPagesByNextLink(body[nextUri])
@@ -98,19 +103,20 @@ PostStatementTables = (url as text, Catalog as text, Schema as text) as table  =
         response = Value.WaitFor(
                 (iteration) =>
                     let
-                        response = Web.Contents(url & "/v1/statement", 
+                        responsePrepare = () => Web.Contents(url & "/v1/statement", 
                             [
                                 Content=Text.ToBinary("Select table_name, table_schema from " & Catalog & ".information_schema.tables where table_schema = '" & Schema & "'"),
                                 Headers=Header,
                                 ManualStatusHandling = {200,400,401,403,404,429,500,503}
                             ]
                         ), 
+                        response = Function.InvokeAfter(responsePrepare, duration),
                         buffered = Binary.Buffer(response),
                         responseCode = Value.Metadata(response)[Response.Status],
                         actualResult = if buffered <> null and responseCode = 200 then buffered else null
                     in
                         actualResult,
-                (iteration) => #duration(0, 0, 0, 0),
+                (iteration) => duration,
                 5),
         body = Json.Document(response),
         Source = if (Record.HasFields(body, {"error"})) then error body[error][message] else GetAllPagesByNextLink(body[nextUri])
@@ -124,19 +130,20 @@ PostStatementQueryTables = (url as text, Catalog as text, schema as text, table 
         response = Value.WaitFor(
                 (iteration) =>
                     let
-                        response = Web.Contents(url & "/v1/statement", 
+                        responsePrepare = () => Web.Contents(url & "/v1/statement", 
                             [
                                 Content=Text.ToBinary("Select * from " & Catalog & "." & schema & "." & table),
                                 Headers=Header,
                                 ManualStatusHandling = {200,400,401,403,404,429,500,503}
                             ]
                         ), 
+                        response = Function.InvokeAfter(responsePrepare, duration),
                         buffered = Binary.Buffer(response),
                         responseCode = Value.Metadata(response)[Response.Status],
                         actualResult = if buffered <> null and responseCode = 200 then buffered else null
                     in
                         actualResult,
-                (iteration) => #duration(0, 0, 0, 1/5),
+                (iteration) => duration,
                 5),
         body = Json.Document(response),
         Source = if (Record.HasFields(body, {"error"})) then error body[error][message] else GetAllPagesByNextLink(body[nextUri])
@@ -153,17 +160,19 @@ GetPage = (url as text) as table =>
         response = Value.WaitFor(
                 (iteration) =>
                     let
-                        response = Web.Contents(url, 
+                        responsePrepare = () => Web.Contents(url, 
                             [
+                                Headers=Header,
                                 ManualStatusHandling = {200,400,401,403,404,429,500,503}
                             ]
                         ), 
+                        response = Function.InvokeAfter(responsePrepare, duration),
                         buffered = Binary.Buffer(response),
                         responseCode = Value.Metadata(response)[Response.Status],
                         actualResult = if buffered <> null and responseCode = 200 then buffered else null
                     in
                         actualResult,
-                (iteration) => #duration(0, 0, 0, 0),
+                (iteration) => duration,
                 5),
         body = Json.Document(response),
         nextLink = GetNextLink(body), 
