@@ -71,6 +71,12 @@
     <Content Include="Diagnostics.pqm">
       <SubType>Content</SubType>
     </Content>
+    <Content Include="Table.GenerateByPage.pqm">
+      <SubType>Content</SubType>
+    </Content>
+    <Content Include="Table.ToNavigationTable.pqm">
+      <SubType>Content</SubType>
+    </Content>
     <Content Include="Trino.query.pq">
       <SubType>Code</SubType>
     </Content>
