@@ -68,15 +68,9 @@
     <Compile Include="resources.resx">
       <SubType>Code</SubType>
     </Compile>
-    <Content Include="Diagnostics.pqm">
+    <Compile Include="Diagnostics.pqm">
       <SubType>Content</SubType>
-    </Content>
-    <Content Include="Table.GenerateByPage.pqm">
-      <SubType>Content</SubType>
-    </Content>
-    <Content Include="Table.ToNavigationTable.pqm">
-      <SubType>Content</SubType>
-    </Content>
+    </Compile>
     <Content Include="Trino.query.pq">
       <SubType>Code</SubType>
     </Content>

@@ -16,7 +16,7 @@ section Trino;
 TrinoType = type function (
     Server as (type text meta [
         Documentation.FieldCaption = "Host",
-        Documentation.FieldDescription = "Coordinater name including TCP port to connect (Defaults: http=8080, https=8443)",
+        Documentation.FieldDescription = "Coordinater name including HTTP protocol and TCP port to connect (Defaults: http=8080, https=8443)",
         Documentation.SampleValues = {"http://trinohost:8080"}
     ]),
     optional Catalog as (type text meta [
@@ -32,12 +32,12 @@ TrinoType = type function (
 
 TrinoImpl = (Server as text, optional Catalog as text) as table =>
     let
-        table = TrinoNavTable(Server, Catalog)   
+        table = TrinoNavTable(Server, Catalog),
+        tableBuffer = Table.Buffer(table)
     in
-        table;
+        tableBuffer;
 
-//if (Credential[AuthenticationKind]?) = "UsernamePassword" then 
-
+//HTTP = () as text => if (Extension.CurrentCredential()[AuthenticationKind]?) = "UsernamePassword" then "https://" else "http://";
 Header = [
     #"X-Trino-User" = "Trino"
     //, #"X-Trino-Client-Capabilities" = "PARAMETRIC_DATETIME"
@@ -45,8 +45,8 @@ Header = [
     //#"Authorization" = "Basic " & Text.From(Extension.CurrentCredential()[Username]) & ":" & Text.From(Extension.CurrentCredential()[Password])
 ];
 
-
-duration = #duration(0,0,0,1/5);
+ManualStatusHandling = {200,400,401,403,404,410,429,500,503};
+duration = #duration(0,0,0,1/50);
 
 PostStatementCatalogs = (url as text, optional Catalog as text) as table =>    
     Table.Buffer(let
@@ -56,8 +56,8 @@ PostStatementCatalogs = (url as text, optional Catalog as text) as table =>
                         responsePrepare = () => Web.Contents(url & "/v1/statement", 
                             [
                                 Content=Text.ToBinary("SHOW CATALOGS"),
-                                Headers=Header,
-                                ManualStatusHandling = {200,400,401,403,404,410,429,500,503}
+                                Headers=Header
+                                //ManualStatusHandling = ManualStatusHandling
                             ]
                         ),
                         response = Function.InvokeAfter(responsePrepare, duration),
@@ -81,8 +81,8 @@ PostStatementSchemas = (url as text, Catalog as text) as table  =>
                         responsePrepare = () => Web.Contents(url & "/v1/statement", 
                             [
                                 Content=Text.ToBinary("Select schema_name from " & Catalog & ".information_schema.schemata"),
-                                Headers=Header,
-                                ManualStatusHandling = {200,400,401,403,404,410,429,500,503}
+                                Headers=Header
+                                //ManualStatusHandling = ManualStatusHandling
                             ]
                         ), 
                         response = Function.InvokeAfter(responsePrepare, duration),
@@ -107,8 +107,8 @@ PostStatementTables = (url as text, Catalog as text, Schema as text) as table  =
                         responsePrepare = () => Web.Contents(url & "/v1/statement", 
                             [
                                 Content=Text.ToBinary("Select table_name, table_schema from " & Catalog & ".information_schema.tables where table_schema = '" & Schema & "'"),
-                                Headers=Header,
-                                ManualStatusHandling = {200,400,401,403,404,410,429,500,503}
+                                Headers=Header
+                                //ManualStatusHandling = ManualStatusHandling
                             ]
                         ), 
                         response = Function.InvokeAfter(responsePrepare, duration),
@@ -134,8 +134,8 @@ PostStatementQueryTables = (url as text, Catalog as text, schema as text, table 
                         responsePrepare = () => Web.Contents(url & "/v1/statement", 
                             [
                                 Content=Text.ToBinary("Select * from " & Catalog & "." & schema & "." & table),
-                                Headers=Header,
-                                ManualStatusHandling = {200,400,401,403,404,410,429,500,503}
+                                Headers=Header
+                                //ManualStatusHandling = ManualStatusHandling
                             ]
                         ), 
                         response = Function.InvokeAfter(responsePrepare, duration),
@@ -161,10 +161,12 @@ GetPage = (url as text) as table =>
         response = Value.WaitFor(
                 (iteration) =>
                     let
+                        isRetry = if iteration > 0 then true else false,
                         responsePrepare = () => Web.Contents(url, 
                             [
-                                Headers=Header,
-                                ManualStatusHandling = {200,400,401,403,404,410,429,500,503}
+                                Headers=Header
+                                //,ManualStatusHandling = ManualStatusHandling
+                                ,IsRetry=isRetry
                             ]
                         ), 
                         response = Function.InvokeAfter(responsePrepare, duration),
@@ -187,26 +189,31 @@ GetPage = (url as text) as table =>
                         ColumnTableFilteredRows = try Table.SelectRows(ColumnTableExpandedValue, each ([Name] = "columns")) otherwise null,
                         ColumnTableFilteredRowsExpandedValue = Table.ExpandRecordColumn(ColumnTableFilteredRows, "Value", {"name", "type"}, {"name", "type"}),
                         ColumnTable = Table.RemoveColumns(ColumnTableFilteredRowsExpandedValue,{"Name"}),
+                        ColumnTableMapping = Table.AddColumn(ColumnTable, "typeMapping", each 
+                                                                                            if Text.Contains([type], "char") then "type text" 
+                                                                                            else if Text.Contains([type], "int") then "type number" 
+                                                                                            else "type text"),
 
                         //Preparte Data Table
                         DataTableConvert = try Record.ToTable(body) otherwise null,
                         DataTableConvertExpandedValue = try Table.ExpandListColumn(DataTableConvert, "Value") otherwise null,
                         DataTableFilteredRows = try Table.SelectRows(DataTableConvertExpandedValue, each ([Name] = "data")) otherwise null,
                         DataTableFilteredRowsAddedCustom = Table.AddColumn(DataTableFilteredRows, "Custom", each Table.Transpose(Table.FromList([Value], Splitter.SplitByNothing(), null, null, ExtraValues.Error))),
-                        Data = Table.SelectColumns(DataTableFilteredRowsAddedCustom,{"Name", "Custom"}),
+                        //Data = Table.SelectColumns(DataTableFilteredRowsAddedCustom,{"Name", "Custom"}),
+                        Data = Table.SelectColumns(DataTableFilteredRowsAddedCustom,{"Custom"}),
 
                         //Bring Columns and Data together
                         ColumnTableColumnsList = List.Generate(()=> [Counter=1], each [Counter] <= Table.RowCount(ColumnTable), each [Counter=[Counter]+1], each "Column" & Number.ToText([Counter])),
                         DataTableFilteredRowsExpandedCustom = Table.ExpandTableColumn(Data, "Custom", ColumnTableColumnsList),
-                        DataTableFilteredRowsRemovedColumns = Table.RemoveColumns(DataTableFilteredRowsExpandedCustom,{"Name"}),
-                        DataTable = Table.RenameColumns(DataTableFilteredRowsRemovedColumns,List.Zip({Table.ColumnNames(DataTableFilteredRowsRemovedColumns),ColumnTable[name]}))
-                    in
+                        //DataTableFilteredRowsRemovedColumns = Table.RemoveColumns(DataTableFilteredRowsExpandedCustom,{"Name"}),
+                        DataTable = Table.RenameColumns(DataTableFilteredRowsExpandedCustom,List.Zip({Table.ColumnNames(DataTableFilteredRowsExpandedCustom),ColumnTable[name]}))                                         
+  
+                   in
                         DataTable 
-            else if (Record.HasFields(body, {"error"}) and List.IsEmpty(body[error])) then
-                 //error Record.ToList(body[error][message])
-                 let
-                        Source = "foo",
-                        Output = error Error.Record("error reason", "error message", "error detail")
+            else if (Record.HasFields(body, {"error"})) then 
+                    let
+                        //Output = error 
+                        Output = error Error.Record(body[error][errorName], body[error][message], body[error][failureInfo][stack])
                     in
                         Output
             else
@@ -296,7 +303,8 @@ TrinoNavTableLeafLeaf = (url as text, Catalog as text, Schema as text) as table 
     let
         tables = PostStatementTables(url,Catalog,Schema),
         tablesConc = Table.AddColumn(tables, "Name", each [table_schema] & "." & [table_name]),
-        tablesConcSort = Table.Sort(tablesConc, {"Name"}),
+        tablesConcSort = Table.Sort(tablesConc, {"Name"}),       
+        //DataColumn = Table.AddColumn(tablesConcSort,"Data", each Diagnostics.LogFailure("Error in GetEntity", () => PostStatementQueryTables(url,Catalog,[table_schema],[table_name]))),
         DataColumn = Table.AddColumn(tablesConcSort,"Data", each PostStatementQueryTables(url,Catalog,[table_schema],[table_name])),
         ItemKindColumn = Table.AddColumn(DataColumn,"ItemKind", each "Table"),
         ItemNameColumn = Table.AddColumn(ItemKindColumn,"ItemName", each "Table"),
@@ -324,60 +332,61 @@ Extension.LoadFunction = (name as text) =>
     in
         Expression.Evaluate(asText, #shared);
 
-Table.GenerateByPage = Extension.LoadFunction("Table.GenerateByPage.pqm");
-Table.ToNavigationTable = Extension.LoadFunction("Table.ToNavigationTable.pqm");
-
-
 // Diagnostics module contains multiple functions. We can take the ones we need.
 Diagnostics = Extension.LoadFunction("Diagnostics.pqm");
 Diagnostics.LogValue = Diagnostics[LogValue];
 Diagnostics.LogFailure = Diagnostics[LogFailure];
 
-// 
-// Table.ToNavigationTable = (
-//     table as table,
-//     keyColumns as list,
-//     nameColumn as text,
-//     dataColumn as text,
-//     itemKindColumn as text,
-//     itemNameColumn as text,
-//     isLeafColumn as text
-// ) as table =>
-//     let
-//         tableType = Value.Type(table),
-//         newTableType = Type.AddTableKey(tableType, keyColumns, true) meta 
-//         [
-//             NavigationTable.NameColumn = nameColumn, 
-//             NavigationTable.DataColumn = dataColumn,
-//             NavigationTable.ItemKindColumn = itemKindColumn, 
-//             Preview.DelayColumn = itemNameColumn, 
-//             NavigationTable.IsLeafColumn = isLeafColumn
-//         ],
-//         navigationTable = Value.ReplaceType(table, newTableType)
-//     in
-//         navigationTable;
+
+//////////////////////
+// HELPER FUNCTIONS //
+//////////////////////
+Table.ToNavigationTable = (
+    table as table,
+    keyColumns as list,
+    nameColumn as text,
+    dataColumn as text,
+    itemKindColumn as text,
+    itemNameColumn as text,
+    isLeafColumn as text
+) as table =>
+    let
+        tableType = Value.Type(table),
+        newTableType = Type.AddTableKey(tableType, keyColumns, true) meta 
+        [
+            NavigationTable.NameColumn = nameColumn, 
+            NavigationTable.DataColumn = dataColumn,
+            NavigationTable.ItemKindColumn = itemKindColumn, 
+            Preview.DelayColumn = itemNameColumn, 
+            NavigationTable.IsLeafColumn = isLeafColumn
+        ],
+        navigationTable = Value.ReplaceType(table, newTableType)
+    in
+        navigationTable;
 
 
-// The getNextPage function takes a single argument and is expected to return a nullable table
-// Table.GenerateByPage = (getNextPage as function) as table =>
-//     let        
-//         listOfPages = List.Generate(
-//             () => getNextPage(null),            // get the first page of data
-//             (lastPage) => lastPage <> null,     // stop when the function returns null
-//             (lastPage) => getNextPage(lastPage) // pass the previous page to the next function call
-//         ),
-//         // concatenate the pages together and filter out empty pages
-//         tableOfPages = Table.FromList(listOfPages, Splitter.SplitByNothing(), {"Column1"}),
-//         tableOfPagesFiltered = Table.SelectRows(tableOfPages, each Table.IsEmpty([Column1]) = false),
-//         firstRow = tableOfPagesFiltered{0}?
-//     in
-//         // tableOfPagesFiltered;
-//         // if we didn't get back any pages of data, return an empty table
-//         // otherwise set the table type based on the columns of the first page
-//         if (firstRow = null) then
-//             Table.FromRows({})
-//         else        
-//             Value.ReplaceType(
-//                 Table.ExpandTableColumn(tableOfPagesFiltered, "Column1", Table.ColumnNames(firstRow[Column1])),
-//                 Value.Type(firstRow[Column1])
-//             );
+//The getNextPage function takes a single argument and is expected to return a nullable table
+Table.GenerateByPage = (getNextPage as function) as table =>
+    let        
+        listOfPages = List.Generate(
+            () => getNextPage(null),            // get the first page of data
+            (lastPage) => lastPage <> null,     // stop when the function returns null
+            (lastPage) => getNextPage(lastPage) // pass the previous page to the next function call
+        ),
+        // concatenate the pages together and filter out empty pages
+        tableOfPages = Table.FromList(listOfPages, Splitter.SplitByNothing(), {"Column1"}),
+        tableOfPagesFiltered = Table.SelectRows(tableOfPages, each Table.IsEmpty([Column1]) = false),
+        firstRow = tableOfPagesFiltered{0}?
+    in
+        // tableOfPagesFiltered;
+        // if we didn't get back any pages of data, return an empty table
+        // otherwise set the table type based on the columns of the first page
+        if (firstRow = null) then
+            Table.FromRows({})
+        else        
+            Value.ReplaceType(
+                Table.ExpandTableColumn(tableOfPagesFiltered, "Column1", Table.ColumnNames(firstRow[Column1])),
+                Value.Type(firstRow[Column1])
+            );
+
+
