@@ -5,7 +5,7 @@ A Microsoft Power BI Custom Connector for importing Trino data into Power BI to 
 The connector is directly communicating with the [Trino client REST API](https://trino.io/docs/current/develop/client-protocol.html) to retrieve data.
 
 ## Need further support?
-In case you encounter any issues while installting or loading data, then feel free to reach out to one of the contributors of this repository. 
+In case you encounter any issues while installing or loading data, then feel free to reach out to one of the contributors of this repository. 
 
 ## Usage Power BI Desktop
 Before you begin you need to allow Power BI Desktop to load Custom Connectors according to this [official documentation from Microsoft](https://docs.microsoft.com/en-us/power-bi/connect-data/desktop-connector-extensibility). This and the following steps end once the connector is officially supported.
