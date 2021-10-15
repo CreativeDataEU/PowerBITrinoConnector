@@ -15,46 +15,38 @@ section Trino;
 
 TrinoType = type function (
     Host as (type text meta [
+        //DataSource.Path = true,
         Documentation.FieldCaption = "Host",
         Documentation.FieldDescription = "The host name of the Trino coordinator.",
         Documentation.SampleValues = {"trinohost"}
     ]),
     Port as (type number meta [
+        //DataSource.Path = true,
         Documentation.FieldCaption = "Port",
         Documentation.FieldDescription = "The port to connect the Trino coordinator. Default: http=8080, https=8443",
         Documentation.SampleValues = {8080}
     ]),
     optional Catalog as (type text meta [
+        //DataSource.Path = true,
         Documentation.FieldCaption = "Catalog",
         Documentation.FieldDescription = "The catalog name to run queries against.",
         Documentation.SampleValues = {"Hive"}
     ])
-//     optional User as (type text meta [
-//         Documentation.FieldCaption = "User",
-//         Documentation.FieldDescription = "The user name associated with the query. Default: TinoPBI",
-//         Documentation.SampleValues = {"TrinoPBI"}
-//     ])
     )
     as table meta [
         Documentation.Name = "Trino",
         Documentation.LongDescription = "Trino Client REST API"        
     ];
 
-User = "TrinoPBI";
-ManualStatusHandling = {200,400,401,403,404,410,429,500,503};
+User = "Trino";
 Duration = #duration(0,0,0,0);
 Http = if (Extension.CurrentCredential()[AuthenticationKind]?) = "UsernamePassword" then "https://" else "http://";
-// Header = [
-//     #"X-Trino-User" = "TrinoPBI"
-//     //, #"X-Trino-Client-Capabilities" = "PARAMETRIC_DATETIME"
-//     //, #"X-Forwarded-Proto" = "https",
-//     //#"Authorization" = "Basic " & Text.From(Extension.CurrentCredential()[Username]) & ":" & Text.From(Extension.CurrentCredential()[Password])
-// ];
 
 TrinoImpl = (Host as text, Port as number, optional Catalog as text) as table =>
     let
         Url = Http & Host & ":" & Number.ToText(Port) & "/v1/statement",
         Table = TrinoNavTable(Url, Catalog)
+        //test = Json.Document(TrinoType)
     in
         Table;
 
@@ -66,10 +58,9 @@ PostStatementCatalogs = (url as text, optional Catalog as text) as table =>
                         isRetry = if iteration > 0 then true else false,
                         responsePrepare = () => Web.Contents(url, 
                             [
-                                Content=Text.ToBinary("show catalogs"),
-                                Headers = [#"X-Trino-User" = User]
+                                Content=Text.ToBinary("show catalogs")
+                                //,Headers = [#"X-Trino-User" = User]
                                 ,IsRetry = isRetry
-                                //ManualStatusHandling = ManualStatusHandling
                             ]
                         ),
                         response = Function.InvokeAfter(responsePrepare, Duration),
@@ -94,9 +85,8 @@ PostStatementSchemas = (url as text, Catalog as text) as table  =>
                         responsePrepare = () => Web.Contents(url, 
                             [
                                 Content=Text.ToBinary("select schema_name from " & Catalog & ".information_schema.schemata")
-                                ,Headers = [#"X-Trino-User" = User]
+                                //,Headers = [#"X-Trino-User" = User]
                                 ,IsRetry = isRetry
-                                //ManualStatusHandling = ManualStatusHandling
                             ]
                         ), 
                         response = Function.InvokeAfter(responsePrepare, Duration),
@@ -122,9 +112,8 @@ PostStatementTables = (url as text, Catalog as text, Schema as text) as table  =
                         responsePrepare = () => Web.Contents(url, 
                             [
                                 Content=Text.ToBinary("select table_name, table_schema from " & Catalog & ".information_schema.tables where table_schema = '" & Schema & "'")
-                                ,Headers = [#"X-Trino-User" = User]
+                                //,Headers = [#"X-Trino-User" = User]
                                 ,IsRetry = isRetry
-                                //ManualStatusHandling = ManualStatusHandling
                             ]
                         ), 
                         response = Function.InvokeAfter(responsePrepare, Duration),
@@ -151,9 +140,8 @@ PostStatementQueryTables = (url as text, Catalog as text, schema as text, table 
                         responsePrepare = () => Web.Contents(url, 
                             [
                                 Content=Text.ToBinary("select * from " & Catalog & "." & schema & "." & table)
-                                ,Headers = [#"X-Trino-User" = User]
+                                //,Headers = [#"X-Trino-User" = User]
                                 ,IsRetry = isRetry
-                                //ManualStatusHandling = ManualStatusHandling
                             ]
                         ), 
                         response = Function.InvokeAfter(responsePrepare, Duration),
@@ -178,9 +166,8 @@ GetPage = (url as text) as table =>
                         isRetry = if iteration > 0 then true else false,
                         responsePrepare = () => Web.Contents(url, 
                             [
-                                Headers = [#"X-Trino-User" = User]
-                                ,IsRetry = isRetry
-                                //,ManualStatusHandling = ManualStatusHandling                                
+                                //Headers = [#"X-Trino-User" = User]
+                                IsRetry = isRetry                             
                             ]
                         ), 
                         response = Function.InvokeAfter(responsePrepare, Duration),
@@ -243,9 +230,9 @@ GetPage = (url as text) as table =>
     in
         DataTable meta [NextLink = nextLink];
 
-//////////////////////
-///// NAVIGATION /////
-//////////////////////
+///////////////////////
+///// NAVIGATION //////
+///////////////////////
 
 TrinoNavTable = (url as text, optional Catalog as text) as table =>
     let
@@ -329,15 +316,17 @@ Trino = [
         UsernamePassword = [
             UsernameLabel = Extension.LoadString("UsernameLabelText"),
             PasswordLabel = Extension.LoadString("PasswordLabelText")
-        ],      
-//         Key = [
-//                      Label = "Access Token",
-//                      KeyLabel = "Get your access token at https://www.surveymonkey.com/apps/power_bi"
-//                  ],
-        // Windows = [],
+        ],   
         Implicit = []
     ],  
-    Label = Extension.LoadString("DataSourceLabel")
+   TestConnection = (dataSourcePath) =>
+        let
+            json = Json.Document(dataSourcePath),
+            host = json[Host],
+            port = json[Port]
+        in
+            { "Trino.Contents", host, port }
+    //Label = "Trino"
 ];
 
 // Data Source UI publishing description
@@ -353,8 +342,7 @@ Trino.Publish = [
 Trino.Icons = [
     Icon16 = { Extension.Contents("Trino16.png"), Extension.Contents("Trino20.png"), Extension.Contents("Trino24.png"), Extension.Contents("Trino32.png") },
     Icon32 = { Extension.Contents("Trino32.png"), Extension.Contents("Trino40.png"), Extension.Contents("Trino48.png"), Extension.Contents("Trino64.png") }
-];
- 
+]; 
 
 //////////////////////
 // HELPER FUNCTIONS //
