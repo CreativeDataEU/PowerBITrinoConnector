@@ -22,7 +22,7 @@ Before you begin you need to allow Power BI Desktop to load Custom Connectors ac
 
 ![Power BI Trino Connector Scanner](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/img/ScanningConnector.JPG)
 
-## Usage Power BI Servie
+## Usage Power BI Service
 To support end-to-end refresh through the Power BI Service on the cloud, it requires you to setup an [on-premises data gateway](https://docs.microsoft.com/en-us/power-bi/connect-data/service-gateway-custom-connectors). This is not required anymore once the connector is officially supported.
 
 ## Releases
