@@ -9,6 +9,7 @@ In case you encounter any issues while installting or loading data, then feel fr
 
 ## Usage Power BI Desktop
 You can take the .mez file from this [link](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/bin/Debug/Trino.mez) and place it in your Power BI custom connectors folder. No other setup is required. You should be able to see connector listed in your Get Data Window:
+
 ![Power BI Trino Connector](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/img/MenuConnector.JPG)
 
 ## Usage Power BI Servie
