@@ -46,7 +46,6 @@ TrinoImpl = (Host as text, Port as number, optional Catalog as text) as table =>
     let
         Url = Http & Host & ":" & Number.ToText(Port) & "/v1/statement",
         Table = TrinoNavTable(Url, Catalog)
-        //test = Json.Document(TrinoType)
     in
         Table;
 
