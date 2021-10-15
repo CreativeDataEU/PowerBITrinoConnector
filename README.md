@@ -11,3 +11,8 @@ The connector is directly communicating with the [Trino client REST API] (https:
 You can grab the .mez file from this [link](https://github.com/migueesc123/PowerBIRESTAPI/raw/master/Power%20BI%20API.mez) and place it in your Power BI custom connectors folder. No other setup is required. You should be able to see the Power BI API Custom Connector in your Get Data Window:
 
 For more information on how to create your own custom connectors folder, please visit the [official documentation from Microsoft Power BI Custom Connectors](https://docs.microsoft.com/en-us/power-bi/connect-data/desktop-connector-extensibility#custom-connectors).
+
+### Release
+
+**October 2021**
+First Release
