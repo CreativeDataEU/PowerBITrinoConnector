@@ -8,7 +8,7 @@ The connector is directly communicating with the [Trino client REST API](https:/
 In case you encounter any issues while installting or loading data, then feel free to reach out to one of the contributors of this repository. 
 
 ## Usage Power BI Desktop
-1. You can take the .mez file from this [link](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/bin/Debug/Trino.mez) and place it in your Power BI custom connectors folder. Now, you should be able to see connector listed in your "Get Data" window, restart Power BI Desktop in case it doesn't appear:
+1. You can take the .mez file from this [link](https://github.com/pichlerpa/PowerBITrinoConnector/raw/master/Trino/bin/Debug/Trino.mez) and place it in your Power BI custom connectors folder. Now, you should be able to see connector listed in your "Get Data" window, restart Power BI Desktop in case it doesn't appear:
 
 ![Power BI Trino Connector Menu](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/img/MenuConnector.JPG)
 
