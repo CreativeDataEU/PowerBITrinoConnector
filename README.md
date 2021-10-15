@@ -12,7 +12,7 @@ In case you encounter any issues while installting or loading data, then feel fr
 
 ![Power BI Trino Connector Menu](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/img/MenuConnector.JPG)
 
-2. Populate the required and optional Parameters to communicate with your Trino environment and hit "Ok" to scan all your objects:
+2. Populate the required and optional Parameters to communicate with your Trino environment and hit OK to scan all your objects:
 
 ![Power BI Trino Connector Parameters](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/img/ParameterConnector.JPG)
 
