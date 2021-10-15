@@ -12,7 +12,7 @@ You can grab the .mez file from this [link](https://github.com/migueesc123/Power
 
 For more information on how to create your own custom connectors folder, please visit the [official documentation from Microsoft Power BI Custom Connectors](https://docs.microsoft.com/en-us/power-bi/connect-data/desktop-connector-extensibility#custom-connectors).
 
-### Release
+## Releases
 
 **October 2021**
 
