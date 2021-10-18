@@ -8,7 +8,7 @@ The connector is directly communicating with the [Trino client REST API](https:/
 In case you encounter any issues while installing or loading data, just open an issue or feel free to reach out to one of the contributors of this repository. 
 
 ## Usage Power BI Desktop
-Before you begin you need to allow Power BI Desktop to load Custom Connectors according to this [official documentation from Microsoft](https://docs.microsoft.com/en-us/power-bi/connect-data/desktop-connector-extensibility). This and the following steps are not required anymore once the connector is officially supported.
+Before you begin you need to allow Power BI Desktop to load Custom Connectors according to this [official documentation from Microsoft](https://docs.microsoft.com/en-us/power-bi/connect-data/desktop-connector-extensibility). Once the connector is officially supported, this and the following steps are not required anymore.
 
 1. You can take the .mez file from this [link](https://github.com/pichlerpa/PowerBITrinoConnector/raw/master/Trino/bin/Debug/Trino.mez) and place it in your Power BI custom connectors folder as outlined in the documentation. Once done, you should be able to see the connector listed in your "Get Data" window, restart Power BI Desktop in case it doesn't appear:
 
@@ -23,7 +23,7 @@ Before you begin you need to allow Power BI Desktop to load Custom Connectors ac
 ![Power BI Trino Connector Scanner](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/img/ScanConnector.JPG)
 
 ## Usage Power BI Service
-To support end-to-end refresh through the Power BI Service on the cloud, it requires you to setup an [on-premises data gateway](https://docs.microsoft.com/en-us/power-bi/connect-data/service-gateway-custom-connectors). This is not required anymore once the connector is officially supported.
+To support end-to-end refresh through the Power BI Service on the cloud, it requires you to setup an [on-premises data gateway](https://docs.microsoft.com/en-us/power-bi/connect-data/service-gateway-custom-connectors). Once the connector is officially supported, this is not required anymore.
 
 ## Releases
 
