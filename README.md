@@ -2,7 +2,7 @@
 A Microsoft Power BI Custom Connector for importing Trino data into Power BI to visualize data and to achieve interactive analytics on top of PowerBI's VertiPaq engine. 
 
 ## Trino client REST API
-The connector is directly communicating with the [Trino client REST API](https://trino.io/docs/current/develop/client-protocol.html) to retrieve data and provides some pararmeters to configure. However, if you recieve query client timeout errors, then those must be fixed by changing the value of query.client.timeout in the coordinators config.properties file - default 5 minutes.
+The connector is directly communicating with the [Trino client REST API](https://trino.io/docs/current/develop/client-protocol.html) to retrieve data and provides some pararmeters to configure. However, if you recieve query client timeout errors, then those must be fixed by changing the value of query.client.timeout in the coordinators config.properties file - default 5 minutes. Basic authentication is currently the only supported authentication mode.
 
 ## Need further support?
 In case you encounter any issues while installing or loading data, just open an issue or feel free to reach out to one of the contributors of this repository. 
