@@ -20,7 +20,7 @@ Before you begin you need to allow Power BI Desktop to load Custom Connectors ac
 
 3. Choose the desired objects you want to import and click "Load" if you want to import data directly. Clicking "Transform Data" allows you to transform data before actually importing it into the analytical storage engine:
 
-![Power BI Trino Connector Scanner](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/img/ScanningConnector.JPG)
+![Power BI Trino Connector Scanner](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/img/ScanConnector.JPG)
 
 ## Usage Power BI Service
 To support end-to-end refresh through the Power BI Service on the cloud, it requires you to setup an [on-premises data gateway](https://docs.microsoft.com/en-us/power-bi/connect-data/service-gateway-custom-connectors). This is not required anymore once the connector is officially supported.
