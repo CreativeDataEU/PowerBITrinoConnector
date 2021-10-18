@@ -27,7 +27,7 @@ shared TrinoType = type function (
         Documentation.SampleValues = {8080}
     ]),
     optional Catalog as (type text meta [
-        DataSource.Path = true,
+        DataSource.Path = false,
         Documentation.FieldCaption = "Catalog",
         Documentation.FieldDescription = "The catalog name to run queries against. Default: All",
         Documentation.SampleValues = {"Hive"}
@@ -246,7 +246,7 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number) as t
                         DataTableReType 
             else if (Record.HasFields(body, {"error"})) then 
                     let
-                        Output = error Error.Record(body[error][errorName], body[error][message], body[error][failureInfo][stack])
+                        Output = error Error.Record("Trino Error: " & body[error][errorName], body[error][message], body[error][failureInfo][stack])
                     in
                         Output
             else
