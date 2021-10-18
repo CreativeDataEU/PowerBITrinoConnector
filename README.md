@@ -16,7 +16,7 @@ Before you begin you need to allow Power BI Desktop to load Custom Connectors ac
 
 2. Populate the required and optional Parameters to communicate with your Trino environment and hit OK to scan all your objects:
 
-![Power BI Trino Connector Parameters](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/img/ParameterConnector.JPG)
+![Power BI Trino Connector Parameters](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/img/ParaConnector.JPG)
 
 3. Choose the desired objects you want to import and click "Load" if you want to import data directly. Clicking "Transform Data" allows you to transform data before actually importing it into the analytical storage engine:
 
