@@ -78,7 +78,7 @@ PostStatementCatalogs = (url as text, optional Catalog as text, optional User as
                         isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, //responsePrepare = () => Web.Contents(url, 
                             [
-                                Content=Text.ToBinary("show catalogs")
+                                 Content = Text.ToBinary("show catalogs")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
@@ -105,7 +105,7 @@ PostStatementSchemas = (url as text, Catalog as text, User as text, Retries as n
                         isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, //responsePrepare = () => Web.Contents(url,  
                             [
-                                Content=Text.ToBinary("select schema_name from " & Catalog & ".information_schema.schemata")
+                                 Content = Text.ToBinary("select schema_name from " & Catalog & ".information_schema.schemata")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
@@ -132,7 +132,7 @@ PostStatementTables = (url as text, Catalog as text, Schema as text, User as tex
                         isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, //responsePrepare = () => Web.Contents(url,  
                             [
-                                Content=Text.ToBinary("select table_name, table_schema from " & Catalog & ".information_schema.tables where table_schema = '" & Schema & "'")
+                                 Content = Text.ToBinary("select table_name, table_schema from " & Catalog & ".information_schema.tables where table_schema = '" & Schema & "'")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
@@ -152,16 +152,15 @@ PostStatementTables = (url as text, Catalog as text, Schema as text, User as tex
      in
         Source;
 
-
-PostStatementQueryTables = (url as text, Catalog as text, schema as text, table as text, User as text, Retries as number, Timeout as number) as table  =>    
-    let
-        response = Value.WaitFor(
+PostStatementQueryColumnNames = (url as text, Catalog as text, schema as text, table as text, User as text, Retries as number, Timeout as number) as table  => 
+    let      
+       response = Value.WaitFor(
                 (iteration) =>
                     let
                         isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, //responsePrepare = () => Web.Contents(url, 
                             [
-                                Content=Text.ToBinary("select * from " & Catalog & "." & schema & "." & table)
+                                 Content = Text.ToBinary("select column_name from " & Catalog & ".information_schema.columns where table_schema = '" & schema & "' and table_name = '" & table & "' order by ordinal_position")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
@@ -177,7 +176,44 @@ PostStatementQueryTables = (url as text, Catalog as text, schema as text, table 
                 Retries),
         body = Json.Document(response),
         Source = if (Record.HasFields(body, {"error"})) then error body[error][message] else GetAllPagesByNextLink(body[nextUri],User,Retries,Timeout)
+     in
+        Source;
 
+PostStatementQueryTables = (url as text, Catalog as text, schema as text, table as text, User as text, Retries as number, Timeout as number) as table  =>    
+    let   
+        //get and prepare column names
+        ColumnNamesTable = PostStatementQueryColumnNames(url,Catalog,schema,table,User,Retries,Timeout),
+        ColumnNameAddedCustom = Table.AddColumn(ColumnNamesTable, "group", each "group"),
+        ColumnNameGroupedRows = Table.Group(ColumnNameAddedCustom, {"group"}, {{"column_name_group", each _, type table [column_name=nullable text, group=text]}}),
+        DataAddedCustom = Table.AddColumn(ColumnNameGroupedRows, "column_name", each Table.Column([column_name_group], "column_name")),
+        ColumnNameString = Table.TransformColumns(DataAddedCustom, {"column_name", each """" & Text.Combine(List.Transform(_, Text.From), """,""") & """", type text}),
+        ColumnNameStringSelect = Table.SelectColumns(ColumnNameString,"column_name"),
+        ColumnNameStringSelectString = Record.Field(ColumnNameStringSelect{0}, "column_name") as text,
+
+        //trigger query using column names
+        response = Value.WaitFor(
+                (iteration) =>
+                    let
+                        isRetry = if iteration > 0 then true else false,
+                        response = Web.Contents(url, //responsePrepare = () => Web.Contents(url, 
+                            [
+                                 Content = Text.ToBinary("select " & ColumnNameStringSelectString & " from " & Catalog & "." & schema & "." & table)
+                                 //Content = Text.ToBinary("select * from " & Catalog & "." & schema & "." & table)
+                                ,Headers = [#"X-Trino-User" = User]
+                                ,Timeout = #duration(0, 0, 0, Timeout)
+                                ,IsRetry = isRetry
+                            ]
+                        ), 
+                        //response = Function.InvokeAfter(responsePrepare, DefaultDelayAPICallRetry),
+                        buffered = Binary.Buffer(response),
+                        responseCode = Value.Metadata(response)[Response.Status],
+                        actualResult = if buffered <> null and responseCode = 200 then buffered else null
+                    in
+                        actualResult,
+                (iteration) => DefaultDelayAPICallRetry,
+                Retries),
+        body = Json.Document(response),
+        Source = if (Record.HasFields(body, {"error"})) then error body[error][message] else GetAllPagesByNextLink(body[nextUri],User,Retries,Timeout)
      in
         Source;
 
@@ -189,7 +225,7 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number) as t
                         isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, //responsePrepare = () => Web.Contents(url,  
                             [
-                                Headers = [#"X-Trino-User" = User]
+                                 Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry                             
                             ]
@@ -208,47 +244,46 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number) as t
         DataTable =
             if (Record.HasFields(body, {"columns","data"}) and not List.IsEmpty(body[data]) and not List.IsEmpty(body[columns])) then
                 let
-                         //Prepare column names and appropriate types
-                        ColumnTableConvert = Record.ToTable(body),
-                        ColumnTableFilteredRows = Table.SelectRows(ColumnTableConvert, each ([Name] = "columns")),
-                        ColumnTableExpandedValue = Table.ExpandListColumn(ColumnTableFilteredRows, "Value"),
-                        ColumnTableFilteredRowsExpandedValue = Table.ExpandRecordColumn(ColumnTableExpandedValue, "Value", {"name", "type"}, {"name", "type"}),
-                        ColumnTable = Table.RemoveColumns(ColumnTableFilteredRowsExpandedValue,{"Name"}),
-                        ColumnTableMapping = Table.AddColumn(ColumnTable, "typeMapping", each 
-                            if Text.Contains([type], "char") then type text //VARCHAR, CHAR
-                            else if Text.Contains([type], "int") then type number //TINYINT, SMALLINT, INTEGER, BIGINT
-                            else if Text.Contains([type], "decimal") then type number //DECIMAL
-                            else if Text.Contains([type], "boolean") then type logical //BOOLEAN
-                            else if Text.Contains([type], "date") then type date //DATE
-                            else if Text.Contains([type], "timestamp") then type datetime //TIMESTAMP, TIMESTAMP(P),TIMESTAMP WITH TIME ZONE, TIMESTAMP(P) WITH TIME ZONE
-                            else if Text.Contains([type], "time") then type time //TIME, TIME(P), TIME WITH TIME ZONE                            
-                            else if Text.Contains([type], "real") then type number //REAL
-                            else if Text.Contains([type], "double") then type number //DOUBLE  
-                            else if Text.Contains([type], "varbinary") then type binary //VARBINARY
-                            else type text), //INTERVAL YEAR TO MONTH, INTERVAL DAY TO SECOND, MAP, JSON, ARRAY, ROW, IPADDRESS, UUID
-                        ColumnTableMappingTranspose = Table.Transpose(Table.SelectColumns(ColumnTableMapping,{"name","typeMapping"})),
-                        ColumnTableMappingTransposeList = Table.ToColumns(ColumnTableMappingTranspose),
+                    //Prepare column names and appropriate types
+                    ColumnTableConvert = Record.ToTable(body),
+                    ColumnTableFilteredRows = Table.SelectRows(ColumnTableConvert, each ([Name] = "columns")),
+                    ColumnTableExpandedValue = Table.ExpandListColumn(ColumnTableFilteredRows, "Value"),
+                    ColumnTableFilteredRowsExpandedValue = Table.ExpandRecordColumn(ColumnTableExpandedValue, "Value", {"name", "type"}, {"name", "type"}),
+                    ColumnTable = Table.RemoveColumns(ColumnTableFilteredRowsExpandedValue,{"Name"}),
+                    ColumnTableMapping = Table.AddColumn(ColumnTable, "typeMapping", each 
+                        if Text.Contains([type], "char") then type text //VARCHAR, CHAR
+                        else if Text.Contains([type], "int") then type number //TINYINT, SMALLINT, INTEGER, BIGINT
+                        else if Text.Contains([type], "decimal") then type number //DECIMAL
+                        else if Text.Contains([type], "boolean") then type logical //BOOLEAN
+                        else if Text.Contains([type], "date") then type date //DATE
+                        else if Text.Contains([type], "timestamp") then type datetime //TIMESTAMP, TIMESTAMP(P),TIMESTAMP WITH TIME ZONE, TIMESTAMP(P) WITH TIME ZONE
+                        else if Text.Contains([type], "time") then type time //TIME, TIME(P), TIME WITH TIME ZONE                            
+                        else if Text.Contains([type], "real") then type number //REAL
+                        else if Text.Contains([type], "double") then type number //DOUBLE  
+                        else if Text.Contains([type], "varbinary") then type binary //VARBINARY
+                        else type text), //INTERVAL YEAR TO MONTH, INTERVAL DAY TO SECOND, MAP, JSON, ARRAY, ROW, IPADDRESS, UUID
+                    ColumnTableMappingTranspose = Table.Transpose(Table.SelectColumns(ColumnTableMapping,{"name","typeMapping"})),
+                    ColumnTableMappingTransposeList = Table.ToColumns(ColumnTableMappingTranspose),
 
-                        //Prepare corresponding data
-                        DataTableConvert = Record.ToTable(body),
-                        DataTableFilteredRows = Table.SelectRows(DataTableConvert, each ([Name] = "data")),
-                        DataTableConvertExpandedValue = Table.ExpandListColumn(DataTableFilteredRows, "Value"),
-                        DataTableFilteredRowsAddedCustom = Table.AddColumn(DataTableConvertExpandedValue, "Custom", each Table.Transpose(Table.FromList([Value], Splitter.SplitByNothing(), null, null, ExtraValues.Error))),
-                        Data = Table.SelectColumns(DataTableFilteredRowsAddedCustom,{"Custom"}),
+                    //Prepare corresponding data
+                    DataTableConvert = Record.ToTable(body),
+                    DataTableFilteredRows = Table.SelectRows(DataTableConvert, each ([Name] = "data")),
+                    DataTableConvertExpandedValue = Table.ExpandListColumn(DataTableFilteredRows, "Value"),
+                    DataTableFilteredRowsAddedCustom = Table.AddColumn(DataTableConvertExpandedValue, "Custom", each Table.Transpose(Table.FromList([Value], Splitter.SplitByNothing(), null, null, ExtraValues.Error))),
+                    Data = Table.SelectColumns(DataTableFilteredRowsAddedCustom,{"Custom"}),
 
-                        //Bring together columns and data
-                        ColumnTableColumnsList = List.Generate(()=> [Counter=1], each [Counter] <= Table.RowCount(ColumnTable), each [Counter=[Counter]+1], each "Column" & Number.ToText([Counter])),
-                        DataTableFilteredRowsExpandedCustom = Table.ExpandTableColumn(Data, "Custom", ColumnTableColumnsList),
-                        DataTableReName = Table.RenameColumns(DataTableFilteredRowsExpandedCustom,List.Zip({Table.ColumnNames(DataTableFilteredRowsExpandedCustom),ColumnTable[name]})),
-                        DataTableReType = Table.TransformColumnTypes(DataTableReName, ColumnTableMappingTransposeList)                                       
-  
-                   in
-                        DataTableReType 
+                    //Bring together columns and data
+                    ColumnTableColumnsList = List.Generate(()=> [Counter=1], each [Counter] <= Table.RowCount(ColumnTable), each [Counter=[Counter]+1], each "Column" & Number.ToText([Counter])),
+                    DataTableFilteredRowsExpandedCustom = Table.ExpandTableColumn(Data, "Custom", ColumnTableColumnsList),
+                    DataTableReName = Table.RenameColumns(DataTableFilteredRowsExpandedCustom,List.Zip({Table.ColumnNames(DataTableFilteredRowsExpandedCustom),ColumnTable[name]})),
+                    DataTableReType = Table.TransformColumnTypes(DataTableReName, ColumnTableMappingTransposeList)                                      
+                in
+                    DataTableReType 
             else if (Record.HasFields(body, {"error"})) then 
-                    let
-                        Output = error Error.Record("Trino Error: " & body[error][errorName], body[error][message], body[error][failureInfo][stack])
-                    in
-                        Output
+                let
+                    Output = error Error.Record("Trino Error: " & body[error][errorName], body[error][message], body[error][failureInfo][stack])
+                in
+                    Output
             else
                 #table({},{})                     
     in
