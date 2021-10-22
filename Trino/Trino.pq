@@ -35,7 +35,7 @@ shared TrinoType = type function (
     optional User as (type text meta [
         DataSource.Path = false,
         Documentation.FieldCaption = "User",
-        Documentation.FieldDescription = "The user name associated with the query. Default: TinoPBI",
+        Documentation.FieldDescription = "The user name associated with the query. Default: TrinoPBI",
         Documentation.SampleValues = {"TrinoPBI"}
     ]),
     optional Retries as (type number meta [
@@ -76,15 +76,14 @@ PostStatementCatalogs = (url as text, optional Catalog as text, optional User as
                 (iteration) =>
                     let
                         isRetry = if iteration > 0 then true else false,
-                        response = Web.Contents(url, //responsePrepare = () => Web.Contents(url, 
+                        response = Web.Contents(url,
                             [
                                  Content = Text.ToBinary("show catalogs")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
                             ]
-                        ),
-                        //response = Function.InvokeAfter(responsePrepare, DefaultDelayAPICallRetry),
+                        ),                        
                         buffered = Binary.Buffer(response),
                         responseCode = Value.Metadata(response)[Response.Status],
                         actualResult = if buffered <> null and responseCode = 200 then buffered else null
@@ -103,15 +102,14 @@ PostStatementSchemas = (url as text, Catalog as text, User as text, Retries as n
                 (iteration) =>
                     let
                         isRetry = if iteration > 0 then true else false,
-                        response = Web.Contents(url, //responsePrepare = () => Web.Contents(url,  
+                        response = Web.Contents(url,
                             [
                                  Content = Text.ToBinary("select schema_name from " & Catalog & ".information_schema.schemata")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
                             ]
-                        ), 
-                        //response = Function.InvokeAfter(responsePrepare, DefaultDelayAPICallRetry),
+                        ),
                         buffered = Binary.Buffer(response),
                         responseCode = Value.Metadata(response)[Response.Status],
                         actualResult = if buffered <> null and responseCode = 200 then buffered else null
@@ -130,7 +128,7 @@ PostStatementTables = (url as text, Catalog as text, Schema as text, User as tex
                 (iteration) =>
                     let
                         isRetry = if iteration > 0 then true else false,
-                        response = Web.Contents(url, //responsePrepare = () => Web.Contents(url,  
+                        response = Web.Contents(url, 
                             [
                                  Content = Text.ToBinary("select table_name, table_schema from " & Catalog & ".information_schema.tables where table_schema = '" & Schema & "'")
                                 ,Headers = [#"X-Trino-User" = User]
@@ -138,7 +136,6 @@ PostStatementTables = (url as text, Catalog as text, Schema as text, User as tex
                                 ,IsRetry = isRetry
                             ]
                         ), 
-                        //response = Function.InvokeAfter(responsePrepare, DefaultDelayAPICallRetry),
                         buffered = Binary.Buffer(response),
                         responseCode = Value.Metadata(response)[Response.Status],
                         actualResult = if buffered <> null and responseCode = 200 then buffered else null
@@ -158,7 +155,7 @@ PostStatementQueryColumnNames = (url as text, Catalog as text, schema as text, t
                 (iteration) =>
                     let
                         isRetry = if iteration > 0 then true else false,
-                        response = Web.Contents(url, //responsePrepare = () => Web.Contents(url, 
+                        response = Web.Contents(url, 
                             [
                                  Content = Text.ToBinary("select column_name from " & Catalog & ".information_schema.columns where table_schema = '" & schema & "' and table_name = '" & table & "' order by ordinal_position")
                                 ,Headers = [#"X-Trino-User" = User]
@@ -166,7 +163,6 @@ PostStatementQueryColumnNames = (url as text, Catalog as text, schema as text, t
                                 ,IsRetry = isRetry
                             ]
                         ), 
-                        //response = Function.InvokeAfter(responsePrepare, DefaultDelayAPICallRetry),
                         buffered = Binary.Buffer(response),
                         responseCode = Value.Metadata(response)[Response.Status],
                         actualResult = if buffered <> null and responseCode = 200 then buffered else null
@@ -195,7 +191,7 @@ PostStatementQueryTables = (url as text, Catalog as text, schema as text, table 
                 (iteration) =>
                     let
                         isRetry = if iteration > 0 then true else false,
-                        response = Web.Contents(url, //responsePrepare = () => Web.Contents(url, 
+                        response = Web.Contents(url, 
                             [
                                  Content = Text.ToBinary("select " & ColumnNameStringSelectString & " from " & Catalog & "." & schema & "." & table)
                                  //Content = Text.ToBinary("select * from " & Catalog & "." & schema & "." & table)
@@ -204,7 +200,6 @@ PostStatementQueryTables = (url as text, Catalog as text, schema as text, table 
                                 ,IsRetry = isRetry
                             ]
                         ), 
-                        //response = Function.InvokeAfter(responsePrepare, DefaultDelayAPICallRetry),
                         buffered = Binary.Buffer(response),
                         responseCode = Value.Metadata(response)[Response.Status],
                         actualResult = if buffered <> null and responseCode = 200 then buffered else null
@@ -223,14 +218,13 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number) as t
                 (iteration) =>
                     let
                         isRetry = if iteration > 0 then true else false,
-                        response = Web.Contents(url, //responsePrepare = () => Web.Contents(url,  
+                        response = Web.Contents(url, 
                             [
                                  Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry                             
                             ]
                         ), 
-                        //response = Function.InvokeAfter(responsePrepare, DefaultDelayAPICallRetry),
                         buffered = Binary.Buffer(response),
                         responseCode = Value.Metadata(response)[Response.Status],
                         actualResult = if buffered <> null and responseCode = 200 then buffered else null
