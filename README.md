@@ -2,30 +2,93 @@
 A Microsoft Power BI Custom Connector for importing Trino data into Power BI to interactively transform, visualize and analyze data. 
 
 ## Trino client REST API
-The connector is directly communicating with the [Trino client REST API](https://trino.io/docs/current/develop/client-protocol.html) to retrieve data and provides some pararmeters to configure. In case you recieve client timeout errors (ABANDONED_QUERY), they need to be fixed by changing the value of query.client.timeout in the coordinators config.properties file - default 5 minutes. Basic Authentication is currently the only supported authentication mode.
+The connector communicates directly with the [Trino client REST API](https://trino.io/docs/current/develop/client-protocol.html) to retrieve data and provides some pararmeters to configure. Client timeout errors (ABANDONED_QUERY) can be fixed by changing the value of query.client.timeout in the coordinators config.properties file (the default is 5 minutes).
+
+## Authentication
+ The supported [authentication kinds](https://learn.microsoft.com/en-us/power-query/handling-authentication#authentication-kinds) are Anonymous, Basic (UsernamePassword) and OAuth.
 
 ## Need further support?
 In case you encounter any issues while installing or loading data, just open an issue or feel free to reach out to one of the contributors of this repository. 
 
-## Usage Power BI Desktop
+## Usage: Power BI Desktop with Anonymous or Basic authentication
 Before you begin you need to allow Power BI Desktop to load Custom Connectors according to this [official documentation from Microsoft](https://docs.microsoft.com/en-us/power-bi/connect-data/desktop-connector-extensibility). Once the connector is officially supported, this and the following steps are not required anymore.
 
-1. You can take the .mez file from this [link](https://github.com/pichlerpa/PowerBITrinoConnector/raw/master/Trino/bin/Debug/Trino.mez) and place it in your Power BI custom connectors folder as outlined in the documentation. Once done, you should be able to see the connector listed in your "Get Data" window, restart Power BI Desktop in case it doesn't appear:
+1. You can take the .mez file from this [link](https://github.com/pichlerpa/PowerBITrinoConnector/raw/master/Trino/bin/Debug/Trino.mez) and place it in your local `Documents\Power BI Desktop\Custom Connectors` folder, as outlined in the documentation. Once done, you should be able to see the connector listed in your "Get Data" window, restart Power BI Desktop in case it doesn't appear:
 
-![Power BI Trino Connector Menu](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/img/MenuConnector.JPG)
+    ![Power BI Trino Connector Menu](Trino/img/MenuConnector.JPG)
 
-2. Populate the required and optional Parameters to communicate with your Trino environment and hit OK to scan all your objects:
+2. Populate the required and optional fields to communicate with your Trino environment and hit OK to scan all your objects:
 
-![Power BI Trino Connector Parameters](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/img/ParaConnector.JPG)
+    ![Power BI Trino Connector Parameters](Trino/img/ParaConnector.JPG)
 
-3. Choose the desired objects you want to import and click "Load" if you want to import data directly. Clicking "Transform Data" allows you to transform data before actually importing it into the analytical storage engine:
+3. Enter username and password (Basic authentication only):
 
-![Power BI Trino Connector Scanner](https://github.com/pichlerpa/PowerBITrinoConnector/blob/master/Trino/img/ScanConnector.JPG)
+    ![UsernamePassword](Trino/img/Basic.png)
 
-## Usage Power BI Service
-To support end-to-end refresh through the Power BI Service on the cloud, it requires you to setup an [on-premises data gateway](https://docs.microsoft.com/en-us/power-bi/connect-data/service-gateway-custom-connectors). Once the connector is officially supported, this is not required anymore.
+4. Choose the desired objects you want to import and click "Load" if you want to import data directly. Clicking "Transform Data" allows you to transform data before actually importing it into the analytical storage engine:
+
+    ![Power BI Trino Connector Scanner](Trino/img/ScanConnector.JPG)
+
+## Usage: Power BI Desktop with OAuth
+In order to use OAuth, you will need to build a .mez file yourself. Here is a step-by-step guide:
+
+1. Install [Visual Studio Code](https://code.visualstudio.com/) and the [Power Query SDK
+extension](https://marketplace.visualstudio.com/items?itemName=PowerQuery.vscode-powerquery-sdk).
+
+2. Clone this repository and open the folder `Trino` in Visual Studio Code. (If you open the main folder of this repository, then the Power Query SDK extension won't recognise it as an extension project.)
+
+3. Optional/potentially necessary: Modify the file `Trino.pq` as needed, in particular the function `TokenMethod`. The current `Trino.pq` has been written for OAuth using [AWS Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/what-is-amazon-cognito.html), but your particular use case may well require a different protocol. See the [official documentation](https://learn.microsoft.com/en-us/power-query/install-sdk) for more information. [This post](https://jussiroine.com/2019/02/building-a-custom-connector-for-power-bi-that-supports-oauth2-to-visualize-my-wellness-data/) is also helpful.
+
+    Note that changes made to `Trino.pq` may affect which files need to be created in the next step.
+
+4. Various files need to be created to store the configuration of your OAuth setup. The all begin with the prefix `oauth_config_`, which is included in `.gitignore` to guard against unintenionally committing credentials.
+
+    * `oauth_config_client_id.txt`  
+    This should contain your application's Client ID. Don't commit this.
+
+    * `oauth_config_client_secret.txt`  
+    This should contain your application's Client Secret. _Really_ don't commit this.
+
+    * `oauth_config_authorize_uri.txt`  
+    This should contain the URI of your authorize-endpoint. An example:
+      ```
+      https://<your-app>.auth.<aws-region>.amazoncognito.com/oauth2/authorize
+      ```
+
+    * `oauth_config_scopes.txt`  
+    This should contain the OAuth scopes. An example:
+      ```
+      openid
+      ```
+      Remark: It should be possible to include more than one scope (space- or comma-seprated?), but this has not been tested.
+    
+    * `oauth_config_token_uri.txt.txt`  
+    This should contain the URI of your token-endpoint. An example:
+      ```
+      https://<your-app>.auth.<aws-region>.amazoncognito.com/oauth2/token
+      ```
+
+5. The .mez file now needs to be built. In the Command Palette, select "Tasks: Run Build Task" (type "> b" to find it):
+
+    ![Build task](Trino/img/RunBuildTask.png)
+
+    Then select the option to use MakePQX:
+
+    ![Build task](Trino/img/MakePQX.png)
+
+    If all goes well, the file `Trino.mez` should appear in the folder `Trino\\bin\\AnyCPU\\Debug`. This folder is included in `.gitignore`, since committing your version of `Trino.mez` (as based on the files `oauth_config_*.txt`) could be a security risk.
+
+6. Once the .mez file has been built, proceed [as above](#usage-power-bi-desktop-with-anonymous-or-basic-authentication) as with Anonymous or Basis authentication, except this time select "Organizational account" and proceed as prompted:
+
+    ![Organizational account](Trino/img/OAuth.png)
+
+## Usage: Power BI Service
+To support end-to-end refresh through the Power BI Service on the cloud, it requires you to setup an [on-premise data gateway](https://docs.microsoft.com/en-us/power-bi/connect-data/service-gateway-custom-connectors). Once the connector is officially supported, this is not required anymore.
 
 ## Releases
 
 **October 2021**
 - 2021-10-15: First Release
+
+**April 2023**
+- 2023-04-26: OAuth added

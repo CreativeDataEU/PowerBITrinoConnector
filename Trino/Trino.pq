@@ -61,7 +61,7 @@ DefaultUser = "TrinoPBI";
 DefaultRetries = 5;
 DefaultTimeout = 100;
 DefaultDelayAPICallRetry = #duration(0,0,0,1/2);
-Http = if (Extension.CurrentCredential()[AuthenticationKind]?) = "UsernamePassword" then "https://" else "http://";
+Http = if (Extension.CurrentCredential()[AuthenticationKind]?) = "Implicit" then "http://" else "https://";
 
 TrinoImpl = (Host as text, Port as number, optional Catalog as text, optional User as text, optional Retries as number, optional Timeout as number) as table =>
     let
@@ -387,9 +387,21 @@ TrinoNavTableLeafLeaf = (url as text, Catalog as text, Schema as text, optional 
 //// DATA SOURCE /////
 //////////////////////
 
+// OAuth2 values
+redirect_uri = "https://oauth.powerbi.com/views/oauthredirect.html";
+client_id = Text.FromBinary(Extension.Contents("oauth_config_client_id.txt"));
+client_secret = Text.FromBinary(Extension.Contents("oauth_config_client_secret.txt"));
+authorize_uri = Text.FromBinary(Extension.Contents("oauth_config_authorize_uri.txt"));
+scopes = Text.FromBinary(Extension.Contents("oauth_config_scopes.txt"));
+token_uri = Text.FromBinary(Extension.Contents("oauth_config_token_uri.txt"));
+
 //Data Source Kind description
 Trino = [
     Authentication = [
+        OAuth = [
+            StartLogin = StartLogin,
+            FinishLogin = FinishLogin
+        ],
         UsernamePassword = [
             UsernameLabel = Extension.LoadString("UsernameLabelText"),
             PasswordLabel = Extension.LoadString("PasswordLabelText")
@@ -405,6 +417,52 @@ Trino = [
             { "Trino.Contents", host, port }
     //Label = "Trino"
 ];
+
+// OAuth helper functions: StartLogin, FinishLogin, Token Method
+StartLogin = (resourceUrl, state, display) =>
+    let
+        AuthorizeUrl = authorize_uri & "?" & Uri.BuildQueryString([
+            response_type = "code",
+            client_id = client_id,  
+            redirect_uri = redirect_uri,
+            state = state,
+            scope = scopes
+        ])
+    in
+        [
+            LoginUri = AuthorizeUrl,
+            CallbackUri = redirect_uri,
+            WindowHeight = 720,
+            WindowWidth = 1024,
+            Context = null
+        ];
+
+FinishLogin = (context, callbackUri, state) =>
+    let
+        Parts = Uri.Parts(callbackUri)[Query]
+    in
+        TokenMethod(Parts[code]);
+
+// Base64Encode(client_id:client_secret)
+// https://docs.aws.amazon.com/cognito/latest/developerguide/token-endpoint.html
+client_id_secret = client_id & ":" & client_secret;
+client_id_secret_bytes = Text.ToBinary(client_id_secret);
+client_id_secret_base64 = Binary.ToText(client_id_secret_bytes);
+
+TokenMethod = (code) =>
+    let
+        Response = Web.Contents(token_uri, [
+            Content = Text.ToBinary(Uri.BuildQueryString([
+                grant_type = "authorization_code",
+                client_id = client_id,
+                code = code,
+                redirect_uri = redirect_uri])),
+            Headers=[
+                #"Content-Type" = "application/x-www-form-urlencoded",
+                #"Authorization" = "Basic " & client_id_secret_base64]]),
+        Parts = Json.Document(Response)
+    in
+        Parts;
 
 // Data Source UI publishing description
 Trino.Publish = [
