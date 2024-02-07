@@ -10,25 +10,6 @@ The connector communicates directly with the [Trino client REST API](https://tri
 ## Need further support?
 In case you encounter any issues while installing or loading data, just open an issue or feel free to reach out to one of the contributors of this repository. 
 
-## Usage: Power BI Desktop with Anonymous or Basic authentication
-Before you begin you need to allow Power BI Desktop to load Custom Connectors according to this [official documentation from Microsoft](https://docs.microsoft.com/en-us/power-bi/connect-data/desktop-connector-extensibility). Once the connector is officially supported, this and the following steps are not required anymore.
-
-1. You can take the .mez file from this [link](https://github.com/pichlerpa/PowerBITrinoConnector/raw/master/Trino/bin/Debug/Trino.mez) and place it in your local `Documents\Power BI Desktop\Custom Connectors` folder, as outlined in the documentation. Once done, you should be able to see the connector listed in your "Get Data" window, restart Power BI Desktop in case it doesn't appear:
-
-    ![Power BI Trino Connector Menu](Trino/img/MenuConnector.JPG)
-
-2. Populate the required and optional fields to communicate with your Trino environment and hit OK to scan all your objects:
-
-    ![Power BI Trino Connector Parameters](Trino/img/ParaConnector.JPG)
-
-3. Enter username and password (Basic authentication only):
-
-    ![UsernamePassword](Trino/img/Basic.png)
-
-4. Choose the desired objects you want to import and click "Load" if you want to import data directly. Clicking "Transform Data" allows you to transform data before actually importing it into the analytical storage engine:
-
-    ![Power BI Trino Connector Scanner](Trino/img/ScanConnector.JPG)
-
 ## Usage: Power BI Desktop 
 If you want to customize the connector or to use OAuth, you will need to build a .mez file yourself by following this step-by-step guide. Otherwise, for just using the connector, you can go right to step 6.
 
