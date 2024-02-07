@@ -1,12 +1,12 @@
-﻿///////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////
-/////////////                                                                 /////////////
-/////////////    Title: Trino Connector for Power BI                          ///////////// 
-/////////////    Created by: Patrick Pichler (pichlerpatr@gmail.com)          ///////////// 
-/////////////    Website: https://github.com/pichlerpa/PowerBITrinoConnector  ///////////// 
-/////////////                                                                 ///////////// 
-///////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////
+﻿//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////
+/////////////                                                                    /////////////
+/////////////    Title: Trino Connector for Power BI                             ///////////// 
+/////////////    Created by: Patrick Pichler (patrick.pichler@creativedata.io)   ///////////// 
+/////////////    Website: https://github.com/pichlerpa/PowerBITrinoConnector     ///////////// 
+/////////////                                                                    ///////////// 
+//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////
 
 section Trino;
 
@@ -50,6 +50,13 @@ shared TrinoType = type function (
         Documentation.FieldCaption = "Timeout",
         Documentation.FieldDescription = "The maximum time to wait in seconds for the host to send data before giving up. Default: 100",
         Documentation.SampleValues = {100}
+    ]),
+    optional SQLQuery as (type text meta [
+        DataSource.Path = false,
+        Documentation.FieldCaption = "SQL Query",
+        Documentation.FieldDescription = "The SQL query you want to execute to retrieve data.",
+        Documentation.SampleValues = {"select custkey,name from tpch.sf1.customer"},
+        Formatting.IsMultiLine = true
     ])
     )
     as table meta [
@@ -63,12 +70,46 @@ DefaultTimeout = 100;
 DefaultDelayAPICallRetry = #duration(0,0,0,1/2);
 Http = if (Extension.CurrentCredential()[AuthenticationKind]?) = "Implicit" then "http://" else "https://";
 
-TrinoImpl = (Host as text, Port as number, optional Catalog as text, optional User as text, optional Retries as number, optional Timeout as number) as table =>
+TrinoImpl = (Host as text, Port as number, optional Catalog as text, optional User as text, optional Retries as number, optional Timeout as number, optional SQLQuery as text) as table =>
     let
-        Url = Http & Host & ":" & Number.ToText(Port) & "/v1/statement",
-        Table = TrinoNavTable(Url, Catalog, User, Retries, Timeout)
+        Url = "http://" & Host & ":" & Number.ToText(Port) & "/v1/statement",
+        Table = 
+            if SQLQuery is null then 
+                TrinoNavTable(Url, Catalog, User, Retries, Timeout)
+            else 
+                let
+                    User = if User is null and (Extension.CurrentCredential()[AuthenticationKind]?) <> "UsernamePassword" then DefaultUser 
+                        else if User is null and (Extension.CurrentCredential()[AuthenticationKind]?) = "UsernamePassword" then Extension.CurrentCredential()[Username] 
+                        else User,
+                    Retries = if Retries is null then DefaultRetries else Retries,
+                    Timeout = if Timeout is null then DefaultTimeout else Timeout,
+                    response = Value.WaitFor(
+                        (iteration) =>
+                            let
+                                isRetry = if iteration > 0 then true else false,
+                                response = Web.Contents(Url,
+                                    [
+                                        Content = Text.ToBinary(SQLQuery),
+                                        Headers = [#"X-Trino-User" = User],
+                                        Timeout = #duration(0, 0, 0, Timeout),
+                                        IsRetry = isRetry
+                                    ]
+                                ),
+                                buffered = Binary.Buffer(response),
+                                responseCode = Value.Metadata(response)[Response.Status],
+                                actualResult = if buffered <> null and responseCode = 200 then buffered else null
+                            in
+                                actualResult,
+                        (iteration) => DefaultDelayAPICallRetry,
+                        Retries
+                    ),
+                    body = Json.Document(response),
+                    Source = if (Record.HasFields(body, {"error"})) then error body[error][message] else GetAllPagesByNextLink(body[nextUri], User, Retries, Timeout)
+                in
+                    Source
     in
         Table;
+
 
 PostStatementCatalogs = (url as text, optional Catalog as text, optional User as text, optional Retries as number, optional Timeout as number) as table =>    
     let
