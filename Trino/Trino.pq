@@ -72,7 +72,7 @@ Http = if (Extension.CurrentCredential()[AuthenticationKind]?) = "Implicit" then
 
 TrinoImpl = (Host as text, Port as number, optional Catalog as text, optional User as text, optional Retries as number, optional Timeout as number, optional SQLQuery as text) as table =>
     let
-        Url = "http://" & Host & ":" & Number.ToText(Port) & "/v1/statement",
+        Url = Http & Host & ":" & Number.ToText(Port) & "/v1/statement",
         Table = 
             if SQLQuery is null then 
                 TrinoNavTable(Url, Catalog, User, Retries, Timeout)
