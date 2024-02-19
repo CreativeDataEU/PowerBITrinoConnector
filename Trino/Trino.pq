@@ -1,4 +1,4 @@
-﻿//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 /////////////                                                                    /////////////
 /////////////    Title: Trino Connector for Power BI                             ///////////// 
@@ -145,7 +145,7 @@ PostStatementSchemas = (url as text, Catalog as text, User as text, Retries as n
                         isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url,
                             [
-                                 Content = Text.ToBinary("select schema_name from " & Catalog & ".information_schema.schemata")
+                                 Content = Text.ToBinary("select schema_name from """ & Catalog & """.information_schema.schemata")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
@@ -171,7 +171,7 @@ PostStatementTables = (url as text, Catalog as text, Schema as text, User as tex
                         isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, 
                             [
-                                 Content = Text.ToBinary("select table_name, table_schema from " & Catalog & ".information_schema.tables where table_schema = '" & Schema & "'")
+                                 Content = Text.ToBinary("select table_name, table_schema from """ & Catalog & """.information_schema.tables where table_schema = '" & Schema & "'")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
@@ -198,7 +198,7 @@ PostStatementQueryColumnNames = (url as text, Catalog as text, schema as text, t
                         isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, 
                             [
-                                 Content = Text.ToBinary("select column_name from " & Catalog & ".information_schema.columns where table_schema = '" & schema & "' and table_name = '" & table & "' order by ordinal_position")
+                                 Content = Text.ToBinary("select column_name from """ & Catalog & """.information_schema.columns where table_schema = '" & schema & "' and table_name = '" & table & "' order by ordinal_position")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
@@ -234,7 +234,7 @@ PostStatementQueryTables = (url as text, Catalog as text, schema as text, table 
                         isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, 
                             [
-                                 Content = Text.ToBinary("select " & ColumnNameStringSelectString & " from " & Catalog & "." & schema & "." & table)
+                                 Content = Text.ToBinary("select " & ColumnNameStringSelectString & " from """ & Catalog & """." & schema & "." & table)
                                  //Content = Text.ToBinary("select * from " & Catalog & "." & schema & "." & table)
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
