@@ -320,11 +320,11 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number) as t
                     timestampColumnsList = List.Combine(Table.ToColumns(timestampColumnsTranspose)),
                     TableFinal = 
                         if (List.Count(timestampColumnsList) > 0) then
-                        let
-                            timestampTransformList=List.Transform(timestampColumnsList, each{_, each DateTime.FromText( Text.Range(_, 0, 19), [Format="yyyy-MM-dd' 'HH:mm:ss", Culture="en-US"]), type datetime }),
-                            TableFinal=Table.TransformColumns(DataTableReType,timestampTransformList)
-                        in
-                            TableFinal
+                            let
+                                timestampTransformList=List.Transform(timestampColumnsList, each{_, each DateTime.FromText( Text.Range(_, 0, 19), [Format="yyyy-MM-dd' 'HH:mm:ss", Culture="en-US"]), type datetime }),
+                                TableFinal=Table.TransformColumns(DataTableReType,timestampTransformList)
+                            in
+                                TableFinal
                         else
                             DataTableReType
 
