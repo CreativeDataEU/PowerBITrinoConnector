@@ -291,7 +291,7 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number) as t
                         else if Text.Contains([type], "decimal") then type number //DECIMAL
                         else if Text.Contains([type], "boolean") then type logical //BOOLEAN
                         else if Text.Contains([type], "date") then type date //DATE
-                        else if Text.Contains([type], "timestamp") then type datetime //TIMESTAMP, TIMESTAMP(P),TIMESTAMP WITH TIME ZONE, TIMESTAMP(P) WITH TIME ZONE
+                        else if Text.Contains([type], "timestamp") then type text //TIMESTAMP, TIMESTAMP(P),TIMESTAMP WITH TIME ZONE, TIMESTAMP(P) WITH TIME ZONE
                         else if Text.Contains([type], "time") then type time //TIME, TIME(P), TIME WITH TIME ZONE                            
                         else if Text.Contains([type], "real") then type number //REAL
                         else if Text.Contains([type], "double") then type number //DOUBLE  
@@ -311,9 +311,25 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number) as t
                     ColumnTableColumnsList = List.Generate(()=> [Counter=1], each [Counter] <= Table.RowCount(ColumnTable), each [Counter=[Counter]+1], each "Column" & Number.ToText([Counter])),
                     DataTableFilteredRowsExpandedCustom = Table.ExpandTableColumn(Data, "Custom", ColumnTableColumnsList),
                     DataTableReName = Table.RenameColumns(DataTableFilteredRowsExpandedCustom,List.Zip({Table.ColumnNames(DataTableFilteredRowsExpandedCustom),ColumnTable[name]})),
-                    DataTableReType = Table.TransformColumnTypes(DataTableReName, ColumnTableMappingTransposeList)                                      
+                    DataTableReType = Table.TransformColumnTypes(DataTableReName, ColumnTableMappingTransposeList),
+
+                    //timestamp columns
+                    timestampColumns= Table.SelectRows(ColumnTable, each (Text.Contains([type], "timestamp")) ),
+
+                    timestampColumnsTranspose = Table.Transpose(Table.SelectColumns(timestampColumns,{"name"})),
+                    timestampColumnsList = List.Combine(Table.ToColumns(timestampColumnsTranspose)),
+                    TableFinal = 
+                        if (List.Count(timestampColumnsList) > 0) then
+                        let
+                            timestampTransformList=List.Transform(timestampColumnsList, each{_, each DateTime.FromText( Text.Range(_, 0, 19), [Format="yyyy-MM-dd' 'HH:mm:ss", Culture="en-US"]), type datetime }),
+                            TableFinal=Table.TransformColumns(DataTableReType,timestampTransformList)
+                        in
+                            TableFinal
+                        else
+                            DataTableReType
+
                 in
-                    DataTableReType 
+                    TableFinal 
             else if (Record.HasFields(body, {"error"})) then 
                 let
                     Output = error Error.Record("Trino Error: " & body[error][errorName], body[error][message], body[error][failureInfo][stack])
