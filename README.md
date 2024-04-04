@@ -80,11 +80,14 @@ To support end-to-end refresh through the Power BI Service on the cloud, it requ
 
 ## Releases
 
-**October 2021**
-- 2021-10-15: First Release
+**April 2024**
+- 2024-04-04: Optimizing data type conversion for date and time
+
+**February 2024**
+- 2024-02-07: Native SQL Query parameter added
 
 **April 2023**
 - 2023-04-26: OAuth added
 
-**February 2024**
-- 2024-02-07: Native SQL Query parameter added
+**October 2021**
+- 2021-10-15: First Release
