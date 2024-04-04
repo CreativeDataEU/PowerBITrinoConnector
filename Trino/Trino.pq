@@ -1,4 +1,4 @@
-//////////////////////////////////////////////////////////////////////////////////////////////
+﻿//////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 /////////////                                                                    /////////////
 /////////////    Title: Trino Connector for Power BI                             ///////////// 
@@ -290,9 +290,10 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number) as t
                         else if Text.Contains([type], "int") then type number //TINYINT, SMALLINT, INTEGER, BIGINT
                         else if Text.Contains([type], "decimal") then type number //DECIMAL
                         else if Text.Contains([type], "boolean") then type logical //BOOLEAN
-                        else if Text.Contains([type], "date") then type date //DATE
-                        else if Text.Contains([type], "timestamp") then type datetime //TIMESTAMP, TIMESTAMP(P),TIMESTAMP WITH TIME ZONE, TIMESTAMP(P) WITH TIME ZONE
-                        else if Text.Contains([type], "time") then type time //TIME, TIME(P), TIME WITH TIME ZONE                            
+                        else if Value.Equals([type], "date") then type date //DATE
+                        else if Value.Equals([type], "time") then type time //TIME, TIME(P)
+                        else if Value.Equals([type], "timestamp") then type datetime //TIMESTAMP, TIMESTAMP(P) 
+                        else if Text.Contains([type], "with time zone") then type text //TIMESTAMP(P) WITH TIME ZONE, TIMESTAMP WITH TIME ZONE, TIME WITH TIME ZONE                  
                         else if Text.Contains([type], "real") then type number //REAL
                         else if Text.Contains([type], "double") then type number //DOUBLE  
                         else if Text.Contains([type], "varbinary") then type binary //VARBINARY
