@@ -508,7 +508,8 @@ TokenMethod = (code) =>
 
 // Data Source UI publishing description
 Trino.Publish = [
-    Beta = true,
+    Beta = false,
+    SupportsDirectQuery = true,
     Category = "Database",
     ButtonText = { Extension.LoadString("ButtonTitle"), Extension.LoadString("ButtonHelp") },
     LearnMoreUrl = "https://powerbi.microsoft.com/",
