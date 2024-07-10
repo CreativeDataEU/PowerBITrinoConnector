@@ -5,7 +5,14 @@ A Microsoft Power BI Custom Connector for importing Trino data into Power BI to 
 The connector communicates directly with the [Trino client REST API](https://trino.io/docs/current/develop/client-protocol.html) to retrieve data and provides some pararmeters to configure. Client timeout errors (ABANDONED_QUERY) can be fixed by changing the value of query.client.timeout in the coordinators config.properties file (the default is 5 minutes).
 
 ## Authentication
- The supported [authentication kinds](https://learn.microsoft.com/en-us/power-query/handling-authentication#authentication-kinds) are Anonymous, Basic (UsernamePassword) and OAuth.
+ The supported [Power BI authentication types](https://learn.microsoft.com/en-us/power-query/handling-authentication#authentication-kinds) are Anonymous, Basic (UsernamePassword) and Organizational account (OAuth) which have been successfully tested in the following combinations with Trino:
+ 
+Trino Authentication Type                   | Power BI Authentication Type
+:-------------------------------------------|:----------------------------------
+PASSWORD for Password file authentication   | Basic
+PASSWORD for LDAP authentication            | Basic
+OAUTH2 for OAuth 2.0 authentication         | Organizational Account
+
 
 ## Need further support?
 In case you encounter any issues while installing or loading data, just open an issue or feel free to reach out to one of the contributors of this repository. 
