@@ -15,7 +15,7 @@ OAUTH2 for OAuth 2.0 authentication         | Organizational Account
 
 
 ## Need further support?
-In case you encounter any issues while installing or loading data, just open an issue or feel free to reach out to one of the contributors of this repository. 
+In case you encounter any issues while installing or loading data, just open an issue or feel free to reach out to info@creativedata.io.
 
 ## Usage: Power BI Desktop 
 If you want to customize the connector or to use OAuth, you will need to build a .mez file yourself by following this step-by-step guide. Otherwise, for just using the connector, you can go right to step 6.
