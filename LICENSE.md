@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2022 Patrick Pichler
+Copyright (c) 2024 Creative Data Europe S.L.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
