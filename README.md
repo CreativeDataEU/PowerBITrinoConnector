@@ -87,6 +87,9 @@ To support end-to-end refresh through the Power BI Service on the cloud, it requ
 
 ## Releases
 
+**July 2024**
+- 2024-07-21: Supporting structural data types including ARRAY, MAP, ROW, and JSON
+
 **April 2024**
 - 2024-04-04: Optimizing data type conversion for date and time
 
