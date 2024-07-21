@@ -297,24 +297,34 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number) as t
                         else if Text.Contains([type], "real") then type number //REAL
                         else if Text.Contains([type], "double") then type number //DOUBLE  
                         else if Text.Contains([type], "varbinary") then type binary //VARBINARY
-                        else type text), //INTERVAL YEAR TO MONTH, INTERVAL DAY TO SECOND, MAP, JSON, ARRAY, ROW, IPADDRESS, UUID
-                    ColumnTableMappingTranspose = Table.Transpose(Table.SelectColumns(ColumnTableMapping,{"name","typeMapping"})),
+                        else type text), //INTERVAL YEAR TO MONTH, INTERVAL DAY TO SECOND, IPADDRESS, UUID
+
+                    // Prepare the list for TransformColumnTypes and filter out columns with type containing "MAP", "JSON", "ARRAY", or "ROW" otherwise error occurs
+                    ColumnTableMappingFiltered = Table.SelectRows(ColumnTableMapping, each not (
+                        Text.Contains([type], "array") or
+                        Text.Contains([type], "map") or
+                        Text.Contains([type], "json") or
+                        Text.Contains([type], "row")
+                    )),
+                    ColumnTableMappingTranspose = Table.Transpose(Table.SelectColumns(ColumnTableMappingFiltered, {"name", "typeMapping"})),
                     ColumnTableMappingTransposeList = Table.ToColumns(ColumnTableMappingTranspose),
 
-                    //Prepare corresponding data
+                    // Prepare corresponding data
                     DataTableConvert = Record.ToTable(body),
                     DataTableFilteredRows = Table.SelectRows(DataTableConvert, each ([Name] = "data")),
                     DataTableConvertExpandedValue = Table.ExpandListColumn(DataTableFilteredRows, "Value"),
                     DataTableFilteredRowsAddedCustom = Table.AddColumn(DataTableConvertExpandedValue, "Custom", each Table.Transpose(Table.FromList([Value], Splitter.SplitByNothing(), null, null, ExtraValues.Error))),
-                    Data = Table.SelectColumns(DataTableFilteredRowsAddedCustom,{"Custom"}),
+                    Data = Table.SelectColumns(DataTableFilteredRowsAddedCustom, {"Custom"}),
 
-                    //Bring together columns and data
+                    // Bring together columns and data
                     ColumnTableColumnsList = List.Generate(()=> [Counter=1], each [Counter] <= Table.RowCount(ColumnTable), each [Counter=[Counter]+1], each "Column" & Number.ToText([Counter])),
                     DataTableFilteredRowsExpandedCustom = Table.ExpandTableColumn(Data, "Custom", ColumnTableColumnsList),
-                    DataTableReName = Table.RenameColumns(DataTableFilteredRowsExpandedCustom,List.Zip({Table.ColumnNames(DataTableFilteredRowsExpandedCustom),ColumnTable[name]})),
-                    DataTableReType = Table.TransformColumnTypes(DataTableReName, ColumnTableMappingTransposeList)                                      
+                    DataTableReName = Table.RenameColumns(DataTableFilteredRowsExpandedCustom, List.Zip({Table.ColumnNames(DataTableFilteredRowsExpandedCustom), ColumnTable[name]})),
+
+                    // Apply column type transformations
+                    DataTableReType = Table.TransformColumnTypes(DataTableReName, ColumnTableMappingTransposeList)
                 in
-                    DataTableReType 
+                    DataTableReType
             else if (Record.HasFields(body, {"error"})) then 
                 let
                     Output = error Error.Record("Trino Error: " & body[error][errorName], body[error][message], body[error][failureInfo][stack])
