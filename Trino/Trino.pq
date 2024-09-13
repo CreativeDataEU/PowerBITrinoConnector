@@ -234,8 +234,7 @@ PostStatementQueryTables = (url as text, Catalog as text, schema as text, table 
                         isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, 
                             [
-                                 Content = Text.ToBinary("select " & ColumnNameStringSelectString & " from """ & Catalog & """." & schema & "." & table)
-                                 //Content = Text.ToBinary("select * from " & Catalog & "." & schema & "." & table)
+                                 Content = Text.ToBinary("select " & ColumnNameStringSelectString & " from """ & Catalog & """.""" & schema & """.""" & table & """")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
