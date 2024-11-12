@@ -1,5 +1,12 @@
 # Power BI Trino
 A Microsoft Power BI Custom Connector for importing Trino data into Power BI to interactively transform, visualize and analyze data. 
+- [Trino Client REST API](#trino-client-rest-api)
+- [Authentication](#authentication)
+- [Instructions](#instructions)
+- [Power BI Service](#power-bi-service)
+- [Power BI Report Server](#power-bi-report-server)
+- [Support](#support)
+- [Releases](#releases)
 
 ## Trino client REST API
 The connector communicates directly with the [Trino client REST API](https://trino.io/docs/current/develop/client-protocol.html) to retrieve data and provides some pararmeters to configure. Client timeout errors (ABANDONED_QUERY) can be fixed by changing the value of query.client.timeout in the coordinators config.properties file (the default is 5 minutes).
@@ -13,11 +20,7 @@ PASSWORD for Password file authentication   | Basic
 PASSWORD for LDAP authentication            | Basic
 OAUTH2 for OAuth 2.0 authentication         | Organizational Account
 
-
-## Need further support?
-In case you encounter any issues while installing or loading data, just open an issue or feel free to reach out to info@creativedata.io.
-
-## Usage: Power BI Desktop 
+## Instructions
 If you want to customize the connector or to use OAuth, you will need to build a .mez file yourself by following this step-by-step guide. Otherwise, for just using the connector, you can go right to step 6.
 
 1. Install [Visual Studio Code](https://code.visualstudio.com/) and the [Power Query SDK
@@ -82,8 +85,14 @@ extension](https://marketplace.visualstudio.com/items?itemName=PowerQuery.vscode
 
     ![Power BI Trino Connector Scanner](Trino/img/ScanConnector.JPG)
 
-## Usage: Power BI Service
+## Power BI Service
 To support end-to-end refresh through the Power BI Service on the cloud, it requires you to setup an [on-premise data gateway](https://docs.microsoft.com/en-us/power-bi/connect-data/service-gateway-custom-connectors). Once the connector is officially supported, this is not required anymore.
+
+## Power BI Report Server
+Custom connectors are currently not supported in Power BI Report Server environments. You can find a list of all supported data sources [here](https://docs.microsoft.com/en-us/power-bi/report-server/data-sources).
+
+## Support
+In case you encounter any issues while installing or loading data, just open an issue or feel free to reach out to info@creativedata.io.
 
 ## Releases
 
