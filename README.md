@@ -96,6 +96,9 @@ In case you encounter any issues while installing or loading data, just open an 
 
 ## Releases
 
+**January 2025**
+- 2025-01-08: Adding [targetResultSize](https://trino.io/docs/current/release/release-0.213.html) as optional parameter to control response data size
+
 **July 2024**
 - 2024-07-21: Supporting structural data types including ARRAY, MAP, ROW, and JSON
 
