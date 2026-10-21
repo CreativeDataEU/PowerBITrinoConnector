@@ -204,7 +204,7 @@ PostStatementQueryColumnNames = (url as text, Catalog as text, schema as text, t
                         isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, 
                             [
-                                 Content = Text.ToBinary("select column_name from """ & Catalog & """.information_schema.columns where table_schema = '" & schema & "' and table_name = '" & table & "' order by ordinal_position")
+                                 Content = Text.ToBinary("select column_name, data_type from """ & Catalog & """.information_schema.columns where table_schema = '" & schema & "' and table_name = '" & table & "' order by ordinal_position")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
@@ -222,10 +222,49 @@ PostStatementQueryColumnNames = (url as text, Catalog as text, schema as text, t
      in
         Source;
 
-PostStatementQueryTables = (url as text, Catalog as text, schema as text, table as text, User as text, Retries as number, Timeout as number, optional TargetResultSize as number) as table  =>    
+PostStatementQueryTables = (url as text, Catalog as text, schema as text, table as text, User as text, Retries as number, Timeout as number, optional TargetResultSize as number) as table =>
+    TrinoTableView([Url = url, Catalog = Catalog, Schema = schema, Table = table, User = User, Retries = Retries,
+        Timeout = Timeout, TargetResultSize = TargetResultSize, Limit = null,
+        Columns = PostStatementQueryColumnNames(url, Catalog, schema, table, User, Retries, Timeout, TargetResultSize)]);
+
+// A Trino table as a view: when Power Query asks for only the first N rows (the navigator preview asks for
+// 1000), OnTake turns that into LIMIT N in Trino instead of fetching the whole table. The column list (names
+// and Trino types) is fetched once and carried along, and the type comes from it without reading data,
+// through the same conversion as every result page. Everything else (load, refresh) reads the full table.
+TrinoTableView = (state as record) as table =>
+    let
+        Empty = TypedEmptyTable(state[Columns]),
+        Run = (limit as nullable number) =>
+            let
+                rows = RunTableQuery(state[Url], state[Catalog], state[Schema], state[Table], state[User], state[Retries],
+                    state[Timeout], state[Columns], state[TargetResultSize], limit)
+            in
+                // No rows: Trino sends no columns either, so return the typed empty table.
+                if Table.ColumnCount(rows) = 0 then Empty else rows
+    in
+        Table.View(null, [
+            GetType = () => Value.Type(Empty),
+            GetRows = () => Run(state[Limit]),
+            OnTake = (count as number) =>
+                @TrinoTableView(state & [Limit = if state[Limit] = null then count else List.Min({state[Limit], count})])
+        ]);
+
+// Types Power Query cannot convert (array, map, json, row) stay untyped.
+TrinoTypeConvertible = (t as text) as logical =>
+    not (Text.Contains(t, "array") or Text.Contains(t, "map") or Text.Contains(t, "json") or Text.Contains(t, "row"));
+
+// The table type of a result with these columns (table with column_name and data_type), without rows.
+TypedEmptyTable = (columns as table) as table =>
+    let
+        typed = Table.SelectRows(columns, each TrinoTypeConvertible([data_type]))
+    in
+        Table.TransformColumnTypes(#table(columns[column_name], {}),
+            List.Transform(Table.ToRecords(typed), each {[column_name], TrinoTypeToPowerQueryType([data_type])}));
+
+RunTableQuery = (url as text, Catalog as text, schema as text, table as text, User as text, Retries as number, Timeout as number, Columns as table, optional TargetResultSize as number, optional Limit as number) as table  =>    
     let   
         //get and prepare column names
-        ColumnNamesTable = PostStatementQueryColumnNames(url,Catalog,schema,table,User,Retries,Timeout,TargetResultSize),
+        ColumnNamesTable = Table.SelectColumns(Columns, {"column_name"}),
         ColumnNameAddedCustom = Table.AddColumn(ColumnNamesTable, "group", each "group"),
         ColumnNameGroupedRows = Table.Group(ColumnNameAddedCustom, {"group"}, {{"column_name_group", each _, type table [column_name=nullable text, group=text]}}),
         DataAddedCustom = Table.AddColumn(ColumnNameGroupedRows, "column_name", each Table.Column([column_name_group], "column_name")),
@@ -240,7 +279,8 @@ PostStatementQueryTables = (url as text, Catalog as text, schema as text, table 
                         isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, 
                             [
-                                 Content = Text.ToBinary("select " & ColumnNameStringSelectString & " from """ & Catalog & """.""" & schema & """.""" & table & """")
+                                 Content = Text.ToBinary("select " & ColumnNameStringSelectString & " from """ & Catalog & """.""" & schema & """.""" & table & """"
+                                    & (if Limit = null then "" else " limit " & Number.ToText(Limit)))
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
@@ -312,13 +352,8 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number, opti
                     ColumnTable = Table.RemoveColumns(ColumnTableFilteredRowsExpandedValue,{"Name"}),
                     ColumnTableMapping = Table.AddColumn(ColumnTable, "typeMapping", each TrinoTypeToPowerQueryType([type])),
 
-                    // Prepare the list for TransformColumnTypes and filter out columns with type containing "MAP", "JSON", "ARRAY", or "ROW" otherwise error occurs
-                    ColumnTableMappingFiltered = Table.SelectRows(ColumnTableMapping, each not (
-                        Text.Contains([type], "array") or
-                        Text.Contains([type], "map") or
-                        Text.Contains([type], "json") or
-                        Text.Contains([type], "row")
-                    )),
+                    // Columns Power Query cannot convert (array, map, json, row) stay untyped, otherwise an error occurs
+                    ColumnTableMappingFiltered = Table.SelectRows(ColumnTableMapping, each TrinoTypeConvertible([type])),
                     ColumnTableMappingTranspose = Table.Transpose(Table.SelectColumns(ColumnTableMappingFiltered, {"name", "typeMapping"})),
                     ColumnTableMappingTransposeList = Table.ToColumns(ColumnTableMappingTranspose),
 
@@ -344,12 +379,7 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number, opti
                 and not Record.HasFields(body, {"error"})
             ) then
                 let
-                    Columns = List.Select(body[columns], each not (
-                        Text.Contains(_[type], "array") or
-                        Text.Contains(_[type], "map") or
-                        Text.Contains(_[type], "json") or
-                        Text.Contains(_[type], "row")
-                    )),
+                    Columns = List.Select(body[columns], each TrinoTypeConvertible(_[type])),
                     EmptyTable = #table(List.Transform(body[columns], each _[name]), {}),
                     ColumnTypes = List.Transform(Columns, each {_[name], TrinoTypeToPowerQueryType(_[type])})
                 in
