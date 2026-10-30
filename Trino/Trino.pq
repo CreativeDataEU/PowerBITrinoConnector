@@ -258,6 +258,20 @@ PostStatementQueryTables = (url as text, Catalog as text, schema as text, table 
      in
         Source;
 
+TrinoTypeToPowerQueryType = (trinoType as text) as type =>
+    if Text.Contains(trinoType, "char") then type text //VARCHAR, CHAR
+    else if Text.Contains(trinoType, "int") then type number //TINYINT, SMALLINT, INTEGER, BIGINT
+    else if Text.Contains(trinoType, "decimal") then type number //DECIMAL
+    else if Text.Contains(trinoType, "boolean") then type logical //BOOLEAN
+    else if Value.Equals(trinoType, "date") then type date //DATE
+    else if Value.Equals(trinoType, "time") then type time //TIME, TIME(P)
+    else if Value.Equals(trinoType, "timestamp") then type datetime //TIMESTAMP, TIMESTAMP(P)
+    else if Text.Contains(trinoType, "with time zone") then type text //TIMESTAMP(P) WITH TIME ZONE, TIMESTAMP WITH TIME ZONE, TIME WITH TIME ZONE
+    else if Text.Contains(trinoType, "real") then type number //REAL
+    else if Text.Contains(trinoType, "double") then type number //DOUBLE
+    else if Text.Contains(trinoType, "varbinary") then type binary //VARBINARY
+    else type text; //INTERVAL YEAR TO MONTH, INTERVAL DAY TO SECOND, IPADDRESS, UUID
+
 GetPage = (url as text, User as text, Retries as number, Timeout as number, optional TargetResultSize as number) as table =>
     let        
         Query = 
@@ -296,19 +310,7 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number, opti
                     ColumnTableExpandedValue = Table.ExpandListColumn(ColumnTableFilteredRows, "Value"),
                     ColumnTableFilteredRowsExpandedValue = Table.ExpandRecordColumn(ColumnTableExpandedValue, "Value", {"name", "type"}, {"name", "type"}),
                     ColumnTable = Table.RemoveColumns(ColumnTableFilteredRowsExpandedValue,{"Name"}),
-                    ColumnTableMapping = Table.AddColumn(ColumnTable, "typeMapping", each 
-                        if Text.Contains([type], "char") then type text //VARCHAR, CHAR
-                        else if Text.Contains([type], "int") then type number //TINYINT, SMALLINT, INTEGER, BIGINT
-                        else if Text.Contains([type], "decimal") then type number //DECIMAL
-                        else if Text.Contains([type], "boolean") then type logical //BOOLEAN
-                        else if Value.Equals([type], "date") then type date //DATE
-                        else if Value.Equals([type], "time") then type time //TIME, TIME(P)
-                        else if Value.Equals([type], "timestamp") then type datetime //TIMESTAMP, TIMESTAMP(P) 
-                        else if Text.Contains([type], "with time zone") then type text //TIMESTAMP(P) WITH TIME ZONE, TIMESTAMP WITH TIME ZONE, TIME WITH TIME ZONE                  
-                        else if Text.Contains([type], "real") then type number //REAL
-                        else if Text.Contains([type], "double") then type number //DOUBLE  
-                        else if Text.Contains([type], "varbinary") then type binary //VARBINARY
-                        else type text), //INTERVAL YEAR TO MONTH, INTERVAL DAY TO SECOND, IPADDRESS, UUID
+                    ColumnTableMapping = Table.AddColumn(ColumnTable, "typeMapping", each TrinoTypeToPowerQueryType([type])),
 
                     // Prepare the list for TransformColumnTypes and filter out columns with type containing "MAP", "JSON", "ARRAY", or "ROW" otherwise error occurs
                     ColumnTableMappingFiltered = Table.SelectRows(ColumnTableMapping, each not (
@@ -336,6 +338,22 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number, opti
                     DataTableReType = Table.TransformColumnTypes(DataTableReName, ColumnTableMappingTransposeList)
                 in
                     DataTableReType
+            else if (
+                Record.HasFields(body, {"columns"})
+                and not List.IsEmpty(body[columns])
+                and not Record.HasFields(body, {"error"})
+            ) then
+                let
+                    Columns = List.Select(body[columns], each not (
+                        Text.Contains(_[type], "array") or
+                        Text.Contains(_[type], "map") or
+                        Text.Contains(_[type], "json") or
+                        Text.Contains(_[type], "row")
+                    )),
+                    EmptyTable = #table(List.Transform(body[columns], each _[name]), {}),
+                    ColumnTypes = List.Transform(Columns, each {_[name], TrinoTypeToPowerQueryType(_[type])})
+                in
+                    Table.TransformColumnTypes(EmptyTable, ColumnTypes)
             else if (Record.HasFields(body, {"error"})) then 
                 let
                     Output = error Error.Record("Trino Error: " & body[error][errorName], body[error][message], body[error][failureInfo][stack])
@@ -600,20 +618,25 @@ Table.GenerateByPage = (getNextPage as function) as table =>
             (lastPage) => lastPage <> null,     // stop when the function returns null
             (lastPage) => getNextPage(lastPage) // pass the previous page to the next function call
         ),
-        // concatenate the pages together and filter out empty pages
+        // Keep empty pages for their schema, but never expand them into null rows.
         tableOfPages = Table.FromList(listOfPages, Splitter.SplitByNothing(), {"Column1"}),
-        tableOfPagesFiltered = Table.SelectRows(tableOfPages, each Table.IsEmpty([Column1]) = false),
-        firstRow = tableOfPagesFiltered{0}?
+        pagesWithSchema = Table.SelectRows(
+            tableOfPages,
+            each
+                not Table.IsEmpty([Column1])
+                or not List.IsEmpty(Table.ColumnNames([Column1]))
+        ),
+        dataPages = Table.SelectRows(tableOfPages, each not Table.IsEmpty([Column1])),
+        firstSchemaRow = pagesWithSchema{0}?
     in
-        // tableOfPagesFiltered;
-        // if we didn't get back any pages of data, return an empty table
-        // otherwise set the table type based on the columns of the first page
-        if (firstRow = null) then
+        if (firstSchemaRow = null) then
             Table.FromRows({})
-        else        
+        else if (Table.IsEmpty(dataPages)) then
+            firstSchemaRow[Column1]
+        else
             Value.ReplaceType(
-                Table.ExpandTableColumn(tableOfPagesFiltered, "Column1", Table.ColumnNames(firstRow[Column1])),
-                Value.Type(firstRow[Column1])
+                Table.ExpandTableColumn(dataPages, "Column1", Table.ColumnNames(firstSchemaRow[Column1])),
+                Value.Type(firstSchemaRow[Column1])
             );
 
 
