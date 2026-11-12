@@ -717,7 +717,10 @@ Value.WaitFor = (producer as function, interval as function, optional count as n
         list = List.Generate(
             () => {0, null},
             (state) => state{0} <> null and (count = null or state{0} < count),
-            (state) => if state{1} <> null then {null, state{1}} else {1 + state{0}, Function.InvokeAfter(() => producer(state{0}), interval(state{0}))},
+            // The first attempt runs at once; only retries wait for `interval`. (Every request used to wait
+            // 0.5 s first: the POST and each result page, about a second per query.)
+            (state) => if state{1} <> null then {null, state{1}} else {1 + state{0},
+                if state{0} = 0 then producer(0) else Function.InvokeAfter(() => producer(state{0}), interval(state{0}))},
             (state) => state{1})
     in
         List.Last(list);
