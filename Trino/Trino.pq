@@ -71,6 +71,12 @@ shared TrinoType = type function (
     ];
 
 DefaultUser = "TrinoPBI";
+
+// With OAuth the user is whoever logged in: Trino takes the identity from the access token
+// (Power Query adds it as a bearer token). Sending X-Trino-User as well makes Trino check
+// impersonation rights, so only the other authentication kinds send it.
+UserHeaders = (User as nullable text) as record =>
+    if (Extension.CurrentCredential()[AuthenticationKind]?) = "OAuth" then [] else [#"X-Trino-User" = User];
 DefaultRetries = 5;
 DefaultTimeout = 100;
 DefaultDelayAPICallRetry = #duration(0,0,0,1/2);
@@ -96,7 +102,7 @@ TrinoImpl = (Host as text, Port as number, optional Catalog as text, optional Us
                                 response = Web.Contents(Url,
                                     [
                                         Content = Text.ToBinary(SQLQuery)
-                                        ,Headers = [#"X-Trino-User" = User]
+                                        ,Headers = UserHeaders(User)
                                         ,Timeout = #duration(0, 0, 0, Timeout)
                                         ,IsRetry = isRetry
                                     ]
@@ -126,7 +132,7 @@ PostStatementCatalogs = (url as text, optional Catalog as text, optional User as
                         response = Web.Contents(url,
                             [
                                  Content = Text.ToBinary("show catalogs")
-                                ,Headers = [#"X-Trino-User" = User]
+                                ,Headers = UserHeaders(User)
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
                             ]
@@ -152,7 +158,7 @@ PostStatementSchemas = (url as text, Catalog as text, User as text, Retries as n
                         response = Web.Contents(url,
                             [
                                  Content = Text.ToBinary("select schema_name from """ & Catalog & """.information_schema.schemata")
-                                ,Headers = [#"X-Trino-User" = User]
+                                ,Headers = UserHeaders(User)
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
                             ]
@@ -178,7 +184,7 @@ PostStatementTables = (url as text, Catalog as text, Schema as text, User as tex
                         response = Web.Contents(url, 
                             [
                                  Content = Text.ToBinary("select table_name, table_schema from """ & Catalog & """.information_schema.tables where table_schema = '" & Schema & "'")
-                                ,Headers = [#"X-Trino-User" = User]
+                                ,Headers = UserHeaders(User)
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry                                
                             ]
@@ -205,7 +211,7 @@ PostStatementQueryColumnNames = (url as text, Catalog as text, schema as text, t
                         response = Web.Contents(url, 
                             [
                                  Content = Text.ToBinary("select column_name from """ & Catalog & """.information_schema.columns where table_schema = '" & schema & "' and table_name = '" & table & "' order by ordinal_position")
-                                ,Headers = [#"X-Trino-User" = User]
+                                ,Headers = UserHeaders(User)
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
                             ]
@@ -241,7 +247,7 @@ PostStatementQueryTables = (url as text, Catalog as text, schema as text, table 
                         response = Web.Contents(url, 
                             [
                                  Content = Text.ToBinary("select " & ColumnNameStringSelectString & " from """ & Catalog & """.""" & schema & """.""" & table & """")
-                                ,Headers = [#"X-Trino-User" = User]
+                                ,Headers = UserHeaders(User)
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry
                             ]
@@ -285,7 +291,7 @@ GetPage = (url as text, User as text, Retries as number, Timeout as number, opti
                         isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, 
                             [
-                                 Headers = [#"X-Trino-User" = User]
+                                 Headers = UserHeaders(User)
                                 ,Timeout = #duration(0, 0, 0, Timeout)
                                 ,IsRetry = isRetry   
                                 ,Query = Query                          
@@ -471,20 +477,30 @@ TrinoNavTableLeafLeaf = (url as text, Catalog as text, Schema as text, optional 
 //// DATA SOURCE /////
 //////////////////////
 
-// OAuth2 values
+// OAuth2 values: one public Keycloak client for the whole platform, Authorization Code with PKCE,
+// no client secret. The oauth_config_*.txt files are written into the .mez by build.py.
+// auth_mode "trino": follow Trino's own external-authentication flow (Trino picks the realm and its
+// own client); "keycloak": PKCE against the fixed Keycloak URLs below. Written by build.py.
+auth_mode = Text.Trim(Text.FromBinary(Extension.Contents("oauth_config_mode.txt")));
 redirect_uri = "https://oauth.powerbi.com/views/oauthredirect.html";
-client_id = Text.FromBinary(Extension.Contents("oauth_config_client_id.txt"));
-client_secret = Text.FromBinary(Extension.Contents("oauth_config_client_secret.txt"));
-authorize_uri = Text.FromBinary(Extension.Contents("oauth_config_authorize_uri.txt"));
-scopes = Text.FromBinary(Extension.Contents("oauth_config_scopes.txt"));
-token_uri = Text.FromBinary(Extension.Contents("oauth_config_token_uri.txt"));
+client_id = Text.Trim(Text.FromBinary(Extension.Contents("oauth_config_client_id.txt")));
+authorize_uri = Text.Trim(Text.FromBinary(Extension.Contents("oauth_config_authorize_uri.txt")));
+scopes = Text.Trim(Text.FromBinary(Extension.Contents("oauth_config_scopes.txt")));
+token_uri = Text.Trim(Text.FromBinary(Extension.Contents("oauth_config_token_uri.txt")));
 
 //Data Source Kind description
 Trino = [
     Authentication = [
         OAuth = [
-            StartLogin = StartLogin,
-            FinishLogin = FinishLogin
+            StartLogin = (resourceUrl, state, display) =>
+                if auth_mode = "trino" then StartLoginTrino(resourceUrl, state, display)
+                else StartLogin(resourceUrl, state, display),
+            FinishLogin = (context, callbackUri, state) =>
+                if auth_mode = "trino" then FinishLoginTrino(context, callbackUri, state)
+                else FinishLogin(context, callbackUri, state),
+            Refresh = (resourceUrl, refresh_token) =>
+                if auth_mode = "trino" then RefreshTrino(resourceUrl, refresh_token)
+                else Refresh(resourceUrl, refresh_token)
         ],
         UsernamePassword = [
             UsernameLabel = Extension.LoadString("UsernameLabelText"),
@@ -502,15 +518,116 @@ Trino = [
     //Label = "Trino"
 ];
 
-// OAuth helper functions: StartLogin, FinishLogin, Token Method
+// ---- Trino external authentication (auth_mode = "trino") -------------------------------------
+// The protocol the Trino CLI and JDBC driver use (client/trino-client io.trino.client.auth.external):
+//   1. An unauthenticated request gets 401 with
+//        WWW-Authenticate: Bearer x_redirect_server="<url>", x_token_server="<url>"
+//   2. The user signs in in a browser at x_redirect_server (Trino sends them to the right realm).
+//   3. The client polls x_token_server with GET until it returns {"token": "..."}
+//      ({"nextUri": "..."} = keep polling, {"error": "..."} = failed).
+//   4. Every request then carries Authorization: Bearer <token>.
+// Power Query only opens a browser for an OAuth StartLogin and only continues when the window reaches
+// CallbackUri. Here CallbackUri is Trino's own /oauth2/callback; FinishLogin then polls for the token.
+// Verified in Power BI Desktop (2026-10-22): Trino still finishes the callback when the window closes on
+// that URL, and Web.Contents works inside StartLogin/FinishLogin before a token exists.
+
+TrinoBaseUrl = (resourceUrl as text) as text =>
+    let
+        ds = Json.Document(resourceUrl)
+    in
+        "https://" & ds[Host] & ":" & Number.ToText(ds[Port]);
+
+ChallengeParameter = (challenge as text, name as text) as text =>
+    let
+        value = Text.BetweenDelimiters(challenge, name & "=""", """")
+    in
+        if value = "" then error Error.Record("Trino login", "The server did not offer external authentication (no " & name & " in WWW-Authenticate).") else value;
+
+StartLoginTrino = (resourceUrl, state, display) =>
+    let
+        baseUrl = TrinoBaseUrl(resourceUrl),
+        probe = Web.Contents(baseUrl & "/v1/statement", [
+            Content = Text.ToBinary("SELECT 1"),
+            Headers = [#"X-Trino-User" = DefaultUser],
+            ManualStatusHandling = {401},
+            IsRetry = true]),
+        challenge = Value.Metadata(probe)[Headers][#"WWW-Authenticate"]
+    in
+        [
+            LoginUri = ChallengeParameter(challenge, "x_redirect_server"),
+            CallbackUri = baseUrl & "/oauth2/callback",
+            WindowHeight = 720,
+            WindowWidth = 1024,
+            Context = ChallengeParameter(challenge, "x_token_server")
+        ];
+
+PollTrinoToken = (tokenUri as text, attempt as number) as text =>
+    let
+        response = Json.Document(Web.Contents(tokenUri, [IsRetry = true, ManualStatusHandling = {202, 401, 404}])),
+        nextUri = Record.FieldOrDefault(response, "nextUri", tokenUri)
+    in
+        if Record.HasFields(response, {"token"}) then response[token]
+        else if Record.HasFields(response, {"error"}) then error Error.Record("Trino login", response[error])
+        else if attempt >= 60 then error Error.Record("Trino login", "Timed out waiting for the sign-in to finish.")
+        else Function.InvokeAfter(() => @PollTrinoToken(nextUri, attempt + 1), #duration(0, 0, 0, 1));
+
+// Seconds until the JWT's exp claim (Power Query refreshes or asks again after that); 300 if unreadable.
+TokenLifetime = (token as text) as number =>
+    let
+        payload = Text.Replace(Text.Replace(Text.Split(token, "."){1}, "-", "+"), "_", "/"),
+        padded = payload & Text.Repeat("=", Number.Mod(4 - Number.Mod(Text.Length(payload), 4), 4)),
+        exp = Json.Document(Binary.FromText(padded, BinaryEncoding.Base64))[exp],
+        now = Duration.TotalSeconds(DateTimeZone.UtcNow() - #datetimezone(1970, 1, 1, 0, 0, 0, 0, 0))
+    in
+        List.Max({30, exp - now - 30});
+
+FinishLoginTrino = (context, callbackUri, state) => TrinoCredential(PollTrinoToken(context, 0));
+
+// A Keycloak JWT carries exp. With Trino's refresh tokens on, Trino hands out its own encrypted token (JWE, five
+// parts, unreadable here) that lasts as long as Keycloak's access token, about 5 minutes (measured on internal):
+// assume 4. The token is also the refresh token: RefreshTrino trades it for a new one.
+TrinoCredential = (token as text) as record =>
+    [access_token = token, refresh_token = token, token_type = "bearer",
+        expires_in = try TokenLifetime(token) otherwise (if List.Count(Text.Split(token, ".")) = 5 then 240 else 300)];
+
+// Trino renews its own token without a browser: a request with the expired token gets 401 with only an
+// x_token_server, which hands out the new token straight away (Trino refreshes against Keycloak itself, for as
+// long as the Keycloak session lasts). A token that still works is kept.
+RefreshTrino = (resourceUrl as text, token as text) as record =>
+    let
+        probe = Web.Contents(TrinoBaseUrl(resourceUrl) & "/v1/statement", [
+            Content = Text.ToBinary("SELECT 1"),
+            Headers = [Authorization = "Bearer " & token],
+            ManualStatusHandling = {401},
+            IsRetry = true]),
+        status = Value.Metadata(probe)[Response.Status]
+    in
+        if status <> 401 then TrinoCredential(token)
+        else TrinoCredential(PollTrinoToken(ChallengeParameter(Value.Metadata(probe)[Headers][#"WWW-Authenticate"], "x_token_server"), 0));
+
+// OAuth helper functions: StartLogin, FinishLogin, Refresh (Authorization Code + PKCE)
+
+// 96 hex characters from three random GUIDs (PKCE verifier: 43 to 128 characters of [A-Za-z0-9-._~]).
+CodeVerifier = () =>
+    Text.Replace(Text.NewGuid() & Text.NewGuid() & Text.NewGuid(), "-", "");
+
+Base64Url = (data as binary) as text =>
+    Text.Replace(Text.Replace(Text.TrimEnd(Binary.ToText(data, BinaryEncoding.Base64), "="), "+", "-"), "/", "_");
+
+CodeChallenge = (verifier as text) as text =>
+    Base64Url(Crypto.CreateHash(CryptoAlgorithm.SHA256, Text.ToBinary(verifier)));
+
 StartLogin = (resourceUrl, state, display) =>
     let
+        verifier = CodeVerifier(),
         AuthorizeUrl = authorize_uri & "?" & Uri.BuildQueryString([
             response_type = "code",
-            client_id = client_id,  
+            client_id = client_id,
             redirect_uri = redirect_uri,
             state = state,
-            scope = scopes
+            scope = scopes,
+            code_challenge = CodeChallenge(verifier),
+            code_challenge_method = "S256"
         ])
     in
         [
@@ -518,32 +635,41 @@ StartLogin = (resourceUrl, state, display) =>
             CallbackUri = redirect_uri,
             WindowHeight = 720,
             WindowWidth = 1024,
-            Context = null
+            Context = verifier
         ];
 
 FinishLogin = (context, callbackUri, state) =>
     let
         Parts = Uri.Parts(callbackUri)[Query]
     in
-        TokenMethod(Parts[code]);
+        if Record.HasFields(Parts, {"error"}) then
+            error Error.Record("OAuth error", Parts[error], Parts[error_description]?)
+        else
+            TokenMethod(Parts[code], context);
 
-// Base64Encode(client_id:client_secret)
-// https://docs.aws.amazon.com/cognito/latest/developerguide/token-endpoint.html
-client_id_secret = client_id & ":" & client_secret;
-client_id_secret_bytes = Text.ToBinary(client_id_secret);
-client_id_secret_base64 = Binary.ToText(client_id_secret_bytes);
-
-TokenMethod = (code) =>
+// Public client: client_id and the PKCE verifier in the body, no Authorization header.
+TokenMethod = (code, verifier) =>
     let
         Response = Web.Contents(token_uri, [
             Content = Text.ToBinary(Uri.BuildQueryString([
                 grant_type = "authorization_code",
                 client_id = client_id,
                 code = code,
+                code_verifier = verifier,
                 redirect_uri = redirect_uri])),
-            Headers=[
-                #"Content-Type" = "application/x-www-form-urlencoded",
-                #"Authorization" = "Basic " & client_id_secret_base64]]),
+            Headers = [#"Content-Type" = "application/x-www-form-urlencoded"]]),
+        Parts = Json.Document(Response)
+    in
+        Parts;
+
+Refresh = (resourceUrl, refresh_token) =>
+    let
+        Response = Web.Contents(token_uri, [
+            Content = Text.ToBinary(Uri.BuildQueryString([
+                grant_type = "refresh_token",
+                client_id = client_id,
+                refresh_token = refresh_token])),
+            Headers = [#"Content-Type" = "application/x-www-form-urlencoded"]]),
         Parts = Json.Document(Response)
     in
         Parts;
