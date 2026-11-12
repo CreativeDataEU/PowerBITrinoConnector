@@ -71,6 +71,11 @@ shared TrinoType = type function (
     ];
 
 DefaultUser = "TrinoPBI";
+// Statements (POST /v1/statement) bypass Power Query's response cache (IsRetry = true): the same text (the
+// navigator always sends "show catalogs") was otherwise answered from the cache with an old response, e.g. a
+// PERMISSION_DENIED from an earlier incident, without reaching Trino. Result pages (nextUri) keep the cache:
+// every nextUri is unique per query, Power Query evaluates the paging more than once, and Trino answers
+// 410 Gone to a page token it has already handed out.
 DefaultRetries = 5;
 DefaultTimeout = 100;
 DefaultDelayAPICallRetry = #duration(0,0,0,1/2);
@@ -92,13 +97,12 @@ TrinoImpl = (Host as text, Port as number, optional Catalog as text, optional Us
                     response = Value.WaitFor(
                         (iteration) =>
                             let
-                                isRetry = if iteration > 0 then true else false,
                                 response = Web.Contents(Url,
                                     [
                                         Content = Text.ToBinary(SQLQuery)
                                         ,Headers = [#"X-Trino-User" = User]
                                         ,Timeout = #duration(0, 0, 0, Timeout)
-                                        ,IsRetry = isRetry
+                                        ,IsRetry = true
                                     ]
                                 ),
                                 buffered = Binary.Buffer(response),
@@ -122,13 +126,12 @@ PostStatementCatalogs = (url as text, optional Catalog as text, optional User as
         response = Value.WaitFor(
                 (iteration) =>
                     let
-                        isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url,
                             [
                                  Content = Text.ToBinary("show catalogs")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
-                                ,IsRetry = isRetry
+                                ,IsRetry = true
                             ]
                         ),                        
                         buffered = Binary.Buffer(response),
@@ -148,13 +151,12 @@ PostStatementSchemas = (url as text, Catalog as text, User as text, Retries as n
         response = Value.WaitFor(
                 (iteration) =>
                     let
-                        isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url,
                             [
                                  Content = Text.ToBinary("select schema_name from """ & Catalog & """.information_schema.schemata")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
-                                ,IsRetry = isRetry
+                                ,IsRetry = true
                             ]
                         ),
                         buffered = Binary.Buffer(response),
@@ -174,13 +176,12 @@ PostStatementTables = (url as text, Catalog as text, Schema as text, User as tex
         response = Value.WaitFor(
                 (iteration) =>
                     let
-                        isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, 
                             [
                                  Content = Text.ToBinary("select table_name, table_schema from """ & Catalog & """.information_schema.tables where table_schema = '" & Schema & "'")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
-                                ,IsRetry = isRetry                                
+                                ,IsRetry = true                                
                             ]
                         ), 
                         buffered = Binary.Buffer(response),
@@ -201,13 +202,12 @@ PostStatementQueryColumnNames = (url as text, Catalog as text, schema as text, t
        response = Value.WaitFor(
                 (iteration) =>
                     let
-                        isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, 
                             [
                                  Content = Text.ToBinary("select column_name from """ & Catalog & """.information_schema.columns where table_schema = '" & schema & "' and table_name = '" & table & "' order by ordinal_position")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
-                                ,IsRetry = isRetry
+                                ,IsRetry = true
                             ]
                         ), 
                         buffered = Binary.Buffer(response),
@@ -237,13 +237,12 @@ PostStatementQueryTables = (url as text, Catalog as text, schema as text, table 
         response = Value.WaitFor(
                 (iteration) =>
                     let
-                        isRetry = if iteration > 0 then true else false,
                         response = Web.Contents(url, 
                             [
                                  Content = Text.ToBinary("select " & ColumnNameStringSelectString & " from """ & Catalog & """.""" & schema & """.""" & table & """")
                                 ,Headers = [#"X-Trino-User" = User]
                                 ,Timeout = #duration(0, 0, 0, Timeout)
-                                ,IsRetry = isRetry
+                                ,IsRetry = true
                             ]
                         ), 
                         buffered = Binary.Buffer(response),
